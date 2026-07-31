@@ -63,6 +63,28 @@ func TestFromNode_OnDemandWarning(t *testing.T) {
 	}
 }
 
+func TestFromNode_PoolTypeReadsInstanceTypeNotPricingModel(t *testing.T) {
+	// Regression test for a bug caught by live smoke-testing: these are two
+	// different labels (see docs/research/node-metadata-keys.md). A spot
+	// node (the overwhelmingly common case) must still show its shape, not
+	// "spot", in PoolType.
+	n := corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"node.kubernetes.io/instance-type": "compute1-4",
+				"servers.ngpc.rxt.io/type":         "spot",
+			},
+		},
+	}
+	row := FromNode(n)
+	if row.PoolType != "compute1-4" {
+		t.Errorf("PoolType = %q, want %q (must read instance-type, not pricing model)", row.PoolType, "compute1-4")
+	}
+	if row.Warning != "" {
+		t.Errorf("Warning = %q, want empty for a spot (non-ondemand) node", row.Warning)
+	}
+}
+
 func TestFromNode_AutoscalerTaintWarning(t *testing.T) {
 	n := corev1.Node{
 		Spec: corev1.NodeSpec{

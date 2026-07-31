@@ -17,9 +17,14 @@ import (
 )
 
 const (
-	nodeRoleLabelPrefix    = "node-role.kubernetes.io/"
-	poolTypeLabel          = "servers.ngpc.rxt.io/type" // docs/research/node-metadata-keys.md
-	onDemandPoolType       = "ondemand"
+	nodeRoleLabelPrefix = "node-role.kubernetes.io/"
+	// instanceTypeLabel gives the node's shape (compute1-4, compute1-8,
+	// memory1-30, ...). pricingModelLabel gives spot vs ondemand — a
+	// DIFFERENT label; conflating the two was a bug caught by live testing,
+	// see docs/research/node-metadata-keys.md.
+	instanceTypeLabel      = "node.kubernetes.io/instance-type"
+	pricingModelLabel      = "servers.ngpc.rxt.io/type"
+	onDemandPricingModel   = "ondemand"
 	autoscalerTaintKeySubs = "DeletionCandidateOfClusterAutoscaler"
 )
 
@@ -39,7 +44,7 @@ func FromNode(n corev1.Node) NodeRow {
 	row := NodeRow{
 		Name:     n.Name,
 		Roles:    rolesOf(n),
-		PoolType: n.Labels[poolTypeLabel],
+		PoolType: n.Labels[instanceTypeLabel],
 		Version:  n.Status.NodeInfo.KubeletVersion,
 		Age:      formatAge(n.CreationTimestamp.Time),
 		Ready:    isReady(n),
@@ -74,7 +79,7 @@ func isReady(n corev1.Node) bool {
 }
 
 func warningFor(n corev1.Node) string {
-	if n.Labels[poolTypeLabel] == onDemandPoolType {
+	if n.Labels[pricingModelLabel] == onDemandPricingModel {
 		return "on-demand pool"
 	}
 	for _, taint := range n.Spec.Taints {

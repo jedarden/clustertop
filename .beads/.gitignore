@@ -1,0 +1,5 @@
+beads.db
+beads.db-shm
+beads.db-wal
+beads.base.jsonl
+.bf_history/

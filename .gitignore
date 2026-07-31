@@ -1,0 +1,4 @@
+/clustertop
+/dist/
+*.test
+*.out

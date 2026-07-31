@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/jedarden/clustertop/internal/config"
@@ -35,12 +36,16 @@ type ClusterState struct {
 	Table     table.Model
 }
 
+const footerHeight = 1
+
 // Model is the top-level Bubble Tea model for the whole dashboard.
 type Model struct {
 	Clusters     []ClusterState
 	idx          map[string]int
 	Width        int
 	Height       int
+	Viewport     viewport.Model
+	ready        bool // true once the first WindowSizeMsg has set real dimensions
 	RefreshEvery time.Duration
 	FetchTimeout time.Duration
 	Quitting     bool
@@ -80,10 +85,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width, m.Height = msg.Width, msg.Height
+		m.Viewport.Width = msg.Width
+		m.Viewport.Height = msg.Height - footerHeight
+		m.ready = true
+		m.applyLayout()
 		return m, nil
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		if newM, cmd, ok := m.handleKey(msg); ok {
+			return newM, cmd
+		}
+		// Not one of clustertop's own bindings — forward to the viewport so
+		// its default scroll keys (up/down/pgup/pgdown) work.
+		var vpCmd tea.Cmd
+		m.Viewport, vpCmd = m.Viewport.Update(msg)
+		return m, vpCmd
 
 	case tickMsg:
 		m.markAllFetching()
@@ -109,8 +125,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cs.Status = StatusOK
 			cs.Err = nil
 			cs.Nodes = msg.Nodes
-			cs.Table.SetRows(toTableRows(msg.Nodes))
 		}
+		m.applyLayout()
 		return m, nil
 	}
 	return m, nil
@@ -119,5 +135,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) markAllFetching() {
 	for i := range m.Clusters {
 		m.Clusters[i].Fetching = true
+	}
+}
+
+// applyLayout re-derives every cluster table's columns and rows from the
+// current terminal width and each cluster's last-known Nodes, then
+// refreshes the viewport's content. Called after any resize or fetch
+// result, so columns/rows and the rendered width never drift apart.
+func (m *Model) applyLayout() {
+	cols := columnsForWidth(m.Width)
+	for i := range m.Clusters {
+		cs := &m.Clusters[i]
+		// bubbles/table re-renders on SetColumns using whatever rows are
+		// currently stored — if those rows still have the OLD column count
+		// (e.g. 6 cells from a wide layout) while cols has just been
+		// narrowed to 4, renderRow panics indexing m.cols[i] out of range.
+		// Clearing rows first, before the column count changes underneath
+		// them, keeps row/column shape consistent at every intermediate
+		// step. Caught live via tmux resize testing against the real fleet.
+		cs.Table.SetRows(nil)
+		cs.Table.SetColumns(cols)
+		cs.Table.SetRows(rowsForWidth(cs.Nodes, m.Width))
+	}
+	if m.ready {
+		m.Viewport.SetContent(renderBody(m.Clusters))
 	}
 }

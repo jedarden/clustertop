@@ -1,0 +1,25 @@
+clusters:
+  - name: apexalgo-iad
+    endpoint: http://traefik-apexalgo-iad.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: ardenone-cluster
+    endpoint: http://traefik-ardenone-cluster.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: ardenone-manager
+    endpoint: http://traefik-ardenone-manager.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: iad-ci
+    endpoint: http://traefik-iad-ci.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: iad-kalshi
+    endpoint: http://kubectl-proxy-iad-kalshi.tail1b1987.ts.net:8001
+    route: direct-tailscale-operator
+  - name: iad-options
+    endpoint: http://traefik-iad-options.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: ord-devimprint
+    endpoint: http://kubectl-proxy-ord-devimprint.tail1b1987.ts.net:8001
+    route: direct-tailscale-operator
+  - name: rs-manager
+    endpoint: http://traefik-rs-manager.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp

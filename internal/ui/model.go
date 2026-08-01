@@ -3,7 +3,6 @@ package ui
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -33,7 +32,6 @@ type ClusterState struct {
 	Err       error
 	LastFetch time.Time
 	Fetching  bool
-	Table     table.Model
 }
 
 const footerHeight = 1
@@ -63,7 +61,6 @@ func NewModel(cfg config.Config, refreshEvery, fetchTimeout time.Duration) Model
 		m.Clusters[i] = ClusterState{
 			Cluster: c,
 			Status:  StatusPending,
-			Table:   newClusterTable(),
 		}
 		m.idx[c.Name] = i
 	}
@@ -120,7 +117,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			cs.Status = StatusError
 			cs.Err = msg.Err
-			// Nodes/Table intentionally left untouched — stale-but-visible.
+			// Nodes intentionally left untouched — stale-but-visible.
 		} else {
 			cs.Status = StatusOK
 			cs.Err = nil
@@ -138,26 +135,12 @@ func (m *Model) markAllFetching() {
 	}
 }
 
-// applyLayout re-derives every cluster table's columns and rows from the
-// current terminal width and each cluster's last-known Nodes, then
-// refreshes the viewport's content. Called after any resize or fetch
-// result, so columns/rows and the rendered width never drift apart.
+// applyLayout re-renders the viewport's content from the current terminal
+// width and each cluster's last-known Nodes. Box sizing lives entirely in
+// box.go's gridLayout, computed fresh at render time from width — there's no
+// per-cluster widget state to keep in sync with a resize anymore.
 func (m *Model) applyLayout() {
-	cols := columnsForWidth(m.Width)
-	for i := range m.Clusters {
-		cs := &m.Clusters[i]
-		// bubbles/table re-renders on SetColumns using whatever rows are
-		// currently stored — if those rows still have the OLD column count
-		// (e.g. 6 cells from a wide layout) while cols has just been
-		// narrowed to 4, renderRow panics indexing m.cols[i] out of range.
-		// Clearing rows first, before the column count changes underneath
-		// them, keeps row/column shape consistent at every intermediate
-		// step. Caught live via tmux resize testing against the real fleet.
-		cs.Table.SetRows(nil)
-		cs.Table.SetColumns(cols)
-		cs.Table.SetRows(rowsForWidth(cs.Nodes, m.Width))
-	}
 	if m.ready {
-		m.Viewport.SetContent(renderBody(m.Clusters))
+		m.Viewport.SetContent(renderBody(m.Clusters, m.Width))
 	}
 }

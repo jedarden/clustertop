@@ -98,19 +98,25 @@ func TestHandleKey_UnmatchedKeyReturnsNotOK(t *testing.T) {
 	}
 }
 
-func TestWindowSizeMsg_TogglesColumnCount(t *testing.T) {
+func TestWindowSizeMsg_ResizesViewportAndReflowsGrid(t *testing.T) {
 	m := newTestModel("a")
 	m.Clusters[0].Nodes = []fetch.NodeRow{{Name: "n1", Ready: true}}
 
 	wide, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
 	wm := wide.(Model)
-	if len(wm.Clusters[0].Table.Columns()) != 6 {
-		t.Errorf("wide: expected 6 columns, got %d", len(wm.Clusters[0].Table.Columns()))
+	if wm.Viewport.Width != 200 {
+		t.Errorf("expected viewport width 200, got %d", wm.Viewport.Width)
+	}
+	wideCols, wideContent := gridLayout(200 - clusterChrome)
+	narrowCols, narrowContent := gridLayout(60 - clusterChrome)
+	if wideCols <= narrowCols && wideContent <= narrowContent {
+		t.Errorf("expected a 200-wide section to lay out looser than a 60-wide one (cols %d/%d, content %d/%d)",
+			wideCols, narrowCols, wideContent, narrowContent)
 	}
 
 	narrow, _ := wm.Update(tea.WindowSizeMsg{Width: 60, Height: 50})
 	nm := narrow.(Model)
-	if len(nm.Clusters[0].Table.Columns()) != 4 {
-		t.Errorf("narrow: expected 4 columns, got %d", len(nm.Clusters[0].Table.Columns()))
+	if nm.Viewport.Width != 60 {
+		t.Errorf("expected viewport width 60, got %d", nm.Viewport.Width)
 	}
 }

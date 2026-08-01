@@ -4,49 +4,89 @@
 
 `clustertop` is a Go + Bubble Tea terminal dashboard that polls every cluster
 in the fleet's existing read-only `kubectl-proxy` endpoint for node status and
-renders a live, auto-refreshing, terminal-width-responsive view — one section
-per cluster, one row per node. It replaces "SSH in, pick a cluster, run
-`kubectl get nodes`, repeat 8 times" with one screen.
+renders a live, auto-refreshing, terminal-width-responsive view — one bordered
+section per cluster, one bordered box per node, wrapped in a grid inside that
+cluster's border. It replaces "SSH in, pick a cluster, run `kubectl get
+nodes`, repeat 8 times" with one screen, and the border is what communicates
+"these nodes are one cluster" — not just a text header.
 
 It ships as a single static binary via a new Argo CI pipeline
 (quality-gate → GoReleaser → GitHub Release), hosted on Forgejo with a GitHub
 mirror per the org's standard flow. It is a client tool only — it never writes
 to any cluster, and it is not itself deployed to any cluster.
 
-**Wide terminal (~120 cols):**
+Node-box grid, real output at 100 columns (`docs/notes/node-box-grid-mockup.md`
+has the full design history, including the two layouts this superseded):
+
 ```
-clustertop — 8 clusters · refreshed 15s ago                          [q] quit  [r] refresh
+┌─ apexalgo-iad ── 3/3 Ready ──────────────────────────────────────────────────────────────────────┐
+│ ╭─────────────────────╮ ╭─────────────────────╮ ╭─────────────────────╮                          │
+│ │ memory1-30-a        │ │ memory1-30-b        │ │ memory1-30-c        │                          │
+│ │ ● Ready             │ │ ● Ready             │ │ ● Ready             │                          │
+│ │ roles: <none>       │ │ roles: <none>       │ │ roles: <none>       │                          │
+│ │ pool: memory1-30    │ │ pool: memory1-30    │ │ pool: memory1-30    │                          │
+│ │ v1.33.0             │ │ v1.33.0             │ │ v1.33.0             │                          │
+│ │ age: 45d            │ │ age: 45d            │ │ age: 45d            │                          │
+│ ╰─────────────────────╯ ╰─────────────────────╯ ╰─────────────────────╯                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌ apexalgo-iad ──────────────────────────────────────────────────── 3/3 Ready ──┐
-  NODE                    STATUS      ROLES          POOL/TYPE     VERSION   AGE
-  memory1-30-a            ● Ready     <none>         memory1-30    v1.33.0   45d
-  memory1-30-b            ● Ready     <none>         memory1-30    v1.33.0   45d
+┌─ iad-ci ── 5/6 Ready ⚠ ──────────────────────────────────────────────────────────────────────────┐
+│ ╭─────────────────────╮ ╭─────────────────────╮ ╭─────────────────────╮ ╭─────────────────────╮  │
+│ │ prod-instance-1781… │ │ prod-instance-1781… │ │ prod-instance-1781… │ │ prod-instance-1782… │  │
+│ │ ● Ready             │ │ ● Ready             │ │ ● Ready             │ │ ⬤ NotReady ⚠ scale… │  │
+│ │ roles: <none>       │ │ roles: <none>       │ │ roles: <none>       │ │ roles: <none>       │  │
+│ │ pool: compute1-8    │ │ pool: compute1-8    │ │ pool: compute1-8    │ │ pool: compute1-4    │  │
+│ │ v1.33.0             │ │ v1.33.0             │ │ v1.33.0             │ │ v1.33.0             │  │
+│ │ age: 32h            │ │ age: 32h            │ │ age: 32h            │ │ age: 24h            │  │
+│ ╰─────────────────────╯ ╰─────────────────────╯ ╰─────────────────────╯ ╰─────────────────────╯  │
+│ ╭─────────────────────╮ ╭─────────────────────╮                                                  │
+│ │ prod-instance-1782… │ │ prod-instance-1782… │                                                  │
+│ │ ● Ready             │ │ ● Ready             │                                                  │
+│ │ roles: <none>       │ │ roles: <none>       │                                                  │
+│ │ pool: compute1-4    │ │ pool: compute1-4    │                                                  │
+│ │ v1.33.0             │ │ v1.33.0             │                                                  │
+│ │ age: 24h            │ │ age: 23h            │                                                  │
+│ ╰─────────────────────╯ ╰─────────────────────╯                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌ iad-ci ───────────────────────────────────────────────────────── 5/6 Ready ⚠ ─┐
-  NODE                    STATUS      ROLES          POOL/TYPE     VERSION   AGE
-  prod-instance-178...    ⬤ NotReady  <none>         compute1-4    v1.33.0   3m   ⚠ scale-down tainted
-
-┌ iad-kalshi ──────────────────────────────────────────────────── UNREACHABLE ──┐
-  ⚠ dial tcp: context deadline exceeded (last seen 4m ago)
+┌─ iad-kalshi — UNREACHABLE ───────────────────────────────────────────────────────────────────────┐
+│ ⚠ dial tcp: context deadline exceeded (last seen 4m ago)                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Narrow terminal (~60 cols) — POOL/TYPE and VERSION dropped, names truncated:**
-```
-clustertop  8 clusters  15s ago       [q]uit [r]efresh
+Design decisions (see `docs/notes/node-box-grid-mockup.md` for the options
+that were rejected):
 
-apexalgo-iad          3/3 Ready
-  memory1-30-a          ● Ready   45d
+1. **Unreachable cluster** collapses to a single error line inside its border
+   (not a grid of dimmed/stale boxes) — simplest, and matches the
+   fault-isolation rule that a dead cluster must never block or corrupt the
+   rest of the render.
+2. **Box width is consistent across the whole render, scaled to available
+   terminal width** — `gridLayout` (in `internal/ui/box.go`) picks the most
+   columns that fit at a minimum readable width (16 chars), then stretches
+   every box in that row evenly into whatever space is left over (capped at
+   30 chars, so a very wide terminal doesn't produce mostly-empty boxes).
+   Column count and width are recomputed on every `tea.WindowSizeMsg` — there
+   is no fixed breakpoint table like the old table-based layout had.
+3. **Node names truncate to fit whatever width `gridLayout` computed** for
+   that render, not a fixed character count — `…` marks the cut.
+4. **Every cluster gets a full bordered section, including single-node
+   clusters** (`ardenone-manager`) — no special-casing by node count.
+5. **Color carries status**: node box borders and status lines are green
+   (Ready) or red (NotReady); a warning suffix renders in yellow. The
+   cluster's outer border also reflects aggregate health — green if every
+   node is Ready, yellow if all Ready but at least one carries a warning, red
+   if any node is NotReady or the cluster is unreachable.
 
-iad-ci                  5/6 Ready ⚠
-  prod-instance-178...   ⬤ NotRdy    3m ⚠
-
-iad-kalshi           UNREACHABLE
-  ⚠ timeout (4m ago)
-```
-
-Breakpoint: full columns above ~100 terminal columns; below that, drop
-POOL/TYPE and VERSION and shorten node-name truncation. Recomputed on every
-`tea.WindowSizeMsg`, not just clipped.
+One real bug worth remembering if this box-rendering code is ever touched
+again: lipgloss's `Style.Width(n)` sizes the *padded* content area, not the
+text area inside the padding. With `Padding(0, 1)`, rendering
+already-truncated text at `Width(contentWidth)` still wrapped it onto an
+extra line, because the padding ate 2 of those columns. The fix is
+`Width(contentWidth + 2)`. Caught by an actual rendered-output smoke check,
+not by `go vet`/`go test` — the tests that would have caught it
+(`TestRenderClusterSection_AllLinesSameWidth`) were written *after* finding
+this by eye, precisely so it can't silently regress.
 
 ## 2. Hard constraints and invariants
 

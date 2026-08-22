@@ -132,11 +132,19 @@ func Scan(declarativeConfigPath string) (config.Config, error) {
 }
 
 func writeClustersYAML(path string, cfg config.Config) error {
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	// Keep the generated file byte-compatible with the checked-in
+	// clusters.yaml, whose sequence items are indented two spaces below the
+	// mapping key.
+	enc.SetIndent(2)
+	if err := enc.Encode(cfg); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	if err := enc.Close(); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
 // Run is the sync-clusters subcommand entrypoint.

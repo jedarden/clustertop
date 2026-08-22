@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jedarden/clustertop/internal/config"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -13,6 +15,28 @@ func writeFile(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWriteClustersYAML_MatchesCommittedIndentation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clusters.yaml")
+	cfg := config.Config{Clusters: []config.Cluster{{
+		Name:     "example",
+		Endpoint: "http://example.tail1b1987.ts.net:8001",
+		Route:    "direct-tailscale-operator",
+	}}}
+
+	if err := writeClustersYAML(path, cfg); err != nil {
+		t.Fatalf("writeClustersYAML() error = %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading generated YAML: %v", err)
+	}
+	want := "clusters:\n  - name: example\n    endpoint: http://example.tail1b1987.ts.net:8001\n    route: direct-tailscale-operator\n"
+	if string(got) != want {
+		t.Errorf("generated YAML =\n%swant =\n%s", got, want)
 	}
 }
 

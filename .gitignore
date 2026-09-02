@@ -2,3 +2,6 @@
 /dist/
 *.test
 *.out
+
+# NEEDLE execution traces are local diagnostics.
+**/.beads/traces/

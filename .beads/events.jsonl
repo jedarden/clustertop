@@ -1,0 +1,6 @@
+{"bead":"clustert-f1f7b01e","event":"claim","strand":"explore","ts":"2026-08-22T01:20:12.332168012+00:00","worker":"luna-cgov"}
+{"adapter":"codex-gpt-5.6-luna-xhigh","bead":"clustert-f1f7b01e","event":"dispatch","model":"gpt-5.6-luna","strand":"explore","ts":"2026-08-22T01:20:12.350548030+00:00","worker":"luna-cgov"}
+{"bead":"clustert-f1f7b01e","duration_ms":202094,"event":"complete","exit_code":0,"outcome":"success","strand":"explore","ts":"2026-08-22T01:23:34.451043966+00:00","worker":"luna-cgov"}
+{"bead":"clustert-2938ca38","event":"claim","strand":"explore","ts":"2026-08-22T06:48:17.550308334+00:00","worker":"luna-cgov"}
+{"adapter":"codex-gpt-5.6-luna-xhigh","bead":"clustert-2938ca38","event":"dispatch","model":"gpt-5.6-luna","strand":"explore","ts":"2026-08-22T06:48:17.608241334+00:00","worker":"luna-cgov"}
+{"bead":"clustert-2938ca38","duration_ms":324384,"event":"complete","exit_code":0,"outcome":"success","strand":"explore","ts":"2026-08-22T06:53:42.018658377+00:00","worker":"luna-cgov"}

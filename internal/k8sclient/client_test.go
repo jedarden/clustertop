@@ -38,6 +38,58 @@ func TestFetchNodes_Valid(t *testing.T) {
 	}
 }
 
+func TestFetchNodes_RequestContract(t *testing.T) {
+	type requestObservation struct {
+		method             string
+		path               string
+		query              string
+		authorization      string
+		proxyAuthorization string
+		cookie             string
+	}
+	var requests []requestObservation
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, requestObservation{
+			method:             r.Method,
+			path:               r.URL.Path,
+			query:              r.URL.RawQuery,
+			authorization:      r.Header.Get("Authorization"),
+			proxyAuthorization: r.Header.Get("Proxy-Authorization"),
+			cookie:             r.Header.Get("Cookie"),
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"kind": "NodeList",
+			"apiVersion": "v1",
+			"items": [{"metadata": {"name": "contract-node"}}]
+		}`))
+	}))
+	defer srv.Close()
+
+	list, err := FetchNodes(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list == nil || len(list.Items) != 1 || list.Items[0].Name != "contract-node" {
+		t.Fatalf("unexpected decoded node list: %+v", list)
+	}
+
+	if len(requests) != 1 {
+		t.Fatalf("expected exactly one request, got %d: %+v", len(requests), requests)
+	}
+	request := requests[0]
+	if request.method != http.MethodGet {
+		t.Errorf("expected only a GET request, got %q", request.method)
+	}
+	if request.path != "/api/v1/nodes" || request.query != "" {
+		t.Errorf("expected request URL /api/v1/nodes without a query, got %q?%q", request.path, request.query)
+	}
+	if request.authorization != "" || request.proxyAuthorization != "" || request.cookie != "" {
+		t.Errorf("expected no client credentials, got Authorization=%q Proxy-Authorization=%q Cookie=%q", request.authorization, request.proxyAuthorization, request.cookie)
+	}
+}
+
 // TestFetchNodes_ErrorContract pins the error contract from
 // docs/research/bubbletea-fault-isolation.md: on deadline exceeded, dial
 // failure, non-200, or decode failure, FetchNodes returns (nil, err) — never

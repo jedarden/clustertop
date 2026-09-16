@@ -47,6 +47,67 @@ func TestUpdate_SuccessThenErrorPreservesStaleNodes(t *testing.T) {
 	}
 }
 
+func TestUpdate_TransitionsPendingHealthyUnreachableAndHealthy(t *testing.T) {
+	m := newTestModel("a")
+	if got := m.Clusters[0].Status; got != StatusPending {
+		t.Fatalf("initial status = %v, want StatusPending", got)
+	}
+
+	m.markAllFetching()
+	newM, _ := m.Update(fetchResultMsg{
+		ClusterName: "a",
+		Nodes:       []fetch.NodeRow{{Name: "fresh", Ready: true}},
+	})
+	m = newM.(Model)
+	lastSuccess := m.Clusters[0].LastFetch
+	if m.Clusters[0].Status != StatusOK {
+		t.Fatalf("status after successful fetch = %v, want StatusOK", m.Clusters[0].Status)
+	}
+	if m.Clusters[0].Fetching {
+		t.Error("Fetching remained true after successful fetch")
+	}
+	if lastSuccess.IsZero() {
+		t.Fatal("successful fetch did not record LastFetch")
+	}
+
+	m.markAllFetching()
+	newM, _ = m.Update(fetchResultMsg{ClusterName: "a", Err: errors.New("proxy unavailable")})
+	m = newM.(Model)
+	cs := m.Clusters[0]
+	if cs.Status != StatusError {
+		t.Fatalf("status after failed refresh = %v, want StatusError", cs.Status)
+	}
+	if cs.Fetching {
+		t.Error("Fetching remained true after failed refresh")
+	}
+	if !cs.LastFetch.Equal(lastSuccess) {
+		t.Errorf("failed refresh changed LastFetch from %v to %v", lastSuccess, cs.LastFetch)
+	}
+	if len(cs.Nodes) != 1 || cs.Nodes[0].Name != "fresh" {
+		t.Errorf("failed refresh replaced the last-known nodes: %+v", cs.Nodes)
+	}
+
+	m.markAllFetching()
+	newM, _ = m.Update(fetchResultMsg{
+		ClusterName: "a",
+		Nodes:       []fetch.NodeRow{{Name: "recovered", Ready: true}},
+	})
+	m = newM.(Model)
+	cs = m.Clusters[0]
+	if cs.Status != StatusOK {
+		t.Fatalf("status after recovery = %v, want StatusOK", cs.Status)
+	}
+	if cs.Err != nil {
+		t.Errorf("recovery retained error: %v", cs.Err)
+	}
+	if len(cs.Nodes) != 1 || cs.Nodes[0].Name != "recovered" {
+		t.Errorf("recovery did not replace stale nodes: %+v", cs.Nodes)
+	}
+	if !cs.LastFetch.After(lastSuccess) {
+		t.Errorf("recovery did not record a newer LastFetch: old=%v new=%v", lastSuccess, cs.LastFetch)
+	}
+}
+
 func TestUpdate_UnknownClusterNameIgnored(t *testing.T) {
 	m := newTestModel("a")
 	msg := fetchResultMsg{ClusterName: "does-not-exist", Nodes: []fetch.NodeRow{{Name: "x"}}}

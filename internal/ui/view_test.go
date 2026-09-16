@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -45,7 +46,8 @@ func TestRenderClusterSection_PendingHasNoBodyLines(t *testing.T) {
 	}
 }
 
-func TestRenderClusterSection_UnreachableCollapsesToSingleLine(t *testing.T) {
+func TestRenderClusterSection_UnreachableWithoutSnapshotHasOnlyErrorLine(t *testing.T) {
+	setAscii(t)
 	cs := ClusterState{
 		Cluster: config.Cluster{Name: "iad-kalshi"},
 		Status:  StatusError,
@@ -58,6 +60,40 @@ func TestRenderClusterSection_UnreachableCollapsesToSingleLine(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "dial tcp") {
 		t.Errorf("expected the error message on the body line, got %q", lines[1])
+	}
+	if strings.Contains(out, "stale") {
+		t.Errorf("initial unreachable state must not be labeled stale:\n%s", out)
+	}
+}
+
+func TestRenderClusterSection_UnreachableRendersStaleSnapshot(t *testing.T) {
+	setAscii(t)
+	cs := ClusterState{
+		Cluster:   config.Cluster{Name: "iad-kalshi"},
+		Status:    StatusError,
+		Nodes:     []fetch.NodeRow{{Name: "last-known-a", Ready: true}, {Name: "last-known-b", Ready: false}},
+		Err:       errors.New("dial tcp: context deadline exceeded"),
+		LastFetch: time.Now().Add(-4 * time.Minute),
+	}
+
+	out := renderClusterSection(cs, 60)
+	if !strings.Contains(out, "stale 4m ago") {
+		t.Errorf("expected elapsed stale indicator, got:\n%s", out)
+	}
+	for _, want := range []string{"UNREACHABLE", "dial tcp", "last-known-a", "last-known-b", "╌"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stale unreachable render missing %q:\n%s", want, out)
+		}
+	}
+
+	lines := strings.Split(out, "\n")
+	if len(lines) != 11 {
+		t.Fatalf("expected error line plus one 8-line stale node row, got %d lines:\n%s", len(lines), out)
+	}
+	for i, line := range lines {
+		if got := lipgloss.Width(line); got != 60 {
+			t.Errorf("line %d rendered at width %d, want 60: %q", i, got, line)
+		}
 	}
 }
 

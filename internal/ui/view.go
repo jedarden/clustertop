@@ -52,16 +52,20 @@ func renderClusterSection(cs ClusterState, width int) string {
 		return renderBorderedSection(title, colorPending, width, "")
 
 	case StatusError:
-		title := styleHeader.Render(cs.Cluster.Name) + " — " + styleUnreachable.Render("UNREACHABLE")
-		staleness := ""
-		if !cs.LastFetch.IsZero() {
-			staleness = fmt.Sprintf(" (last seen %s ago)", time.Since(cs.LastFetch).Round(time.Second))
+		title := styleHeader.Render(cs.Cluster.Name)
+		staleness := staleAge(cs.LastFetch)
+		if staleness != "" {
+			title += " — " + styleStale.Render("stale "+staleness+" ago")
 		}
+		title += " — " + styleUnreachable.Render("UNREACHABLE")
 		errText := ""
 		if cs.Err != nil {
 			errText = cs.Err.Error()
 		}
-		body := styleNotReady.Render(fmt.Sprintf("⚠ %s%s", errText, staleness))
+		body := styleNotReady.Render("⚠ " + errText)
+		if len(cs.Nodes) > 0 {
+			body += "\n" + renderStaleNodeGrid(cs.Nodes, width-clusterChrome)
+		}
 		return renderBorderedSection(title, colorUnreachable, width, body)
 
 	default: // StatusOK — may still be rendering stale data if Fetching after an error elsewhere
@@ -81,6 +85,30 @@ func renderClusterSection(cs ClusterState, width int) string {
 		innerWidth := width - clusterChrome
 		body := renderNodeGrid(cs.Nodes, innerWidth)
 		return renderBorderedSection(title, borderColor, width, body)
+	}
+}
+
+// staleAge returns a compact, human-readable age for the last successful
+// snapshot. A zero timestamp means this cluster has never had data to show,
+// so the initial unreachable state is not mislabeled as stale.
+func staleAge(lastFetch time.Time) string {
+	if lastFetch.IsZero() {
+		return ""
+	}
+
+	age := time.Since(lastFetch)
+	if age < 0 {
+		age = 0
+	}
+	switch {
+	case age < time.Minute:
+		return fmt.Sprintf("%ds", int(age/time.Second))
+	case age < time.Hour:
+		return fmt.Sprintf("%dm", int(age/time.Minute))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(age/time.Hour))
+	default:
+		return fmt.Sprintf("%dd", int(age/(24*time.Hour)))
 	}
 }
 

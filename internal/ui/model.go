@@ -30,7 +30,7 @@ type ClusterState struct {
 	Status    ClusterStatus
 	Nodes     []fetch.NodeRow
 	Err       error
-	LastFetch time.Time
+	LastFetch time.Time // time of the most recent successful fetch
 	Fetching  bool
 }
 
@@ -113,15 +113,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cs := &m.Clusters[i]
 		cs.Fetching = false
-		cs.LastFetch = time.Now()
 		if msg.Err != nil {
 			cs.Status = StatusError
 			cs.Err = msg.Err
-			// Nodes intentionally left untouched — stale-but-visible.
+			// Nodes and LastFetch intentionally remain untouched — they are the
+			// last successful snapshot and must remain visible as stale data.
 		} else {
 			cs.Status = StatusOK
 			cs.Err = nil
 			cs.Nodes = msg.Nodes
+			cs.LastFetch = time.Now()
 		}
 		m.applyLayout()
 		return m, nil

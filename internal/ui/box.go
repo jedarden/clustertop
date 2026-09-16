@@ -20,6 +20,11 @@ const (
 	clusterChrome = 4  // outer cluster border: 2 border runes + 1 padding rune each side
 )
 
+var staleNodeBorder = lipgloss.Border{
+	Top: "╌", Bottom: "╌", Left: "╎", Right: "╎",
+	TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
+}
+
 // truncate shortens s to at most width runes, appending an ellipsis when it
 // had to cut. Rune-based (not byte-based) so multi-byte glyphs in warnings
 // never split mid-character.
@@ -113,11 +118,29 @@ func nodeBoxBorderColor(n fetch.NodeRow) lipgloss.Color {
 // the text itself (already truncated to contentWidth) to land without an
 // unwanted extra wrap. Confirmed empirically; see docs/notes/node-box-grid-mockup.md.
 func renderNodeBox(n fetch.NodeRow, contentWidth int) string {
+	return renderNodeBoxState(n, contentWidth, false)
+}
+
+// renderStaleNodeBox keeps the node's last-known readiness colors but dims
+// the complete box and uses a dashed border, making it clear that these are
+// historical observations rather than the result of the failed refresh.
+func renderStaleNodeBox(n fetch.NodeRow, contentWidth int) string {
+	return renderNodeBoxState(n, contentWidth, true)
+}
+
+func renderNodeBoxState(n fetch.NodeRow, contentWidth int, stale bool) string {
+	border := lipgloss.RoundedBorder()
+	if stale {
+		border = staleNodeBorder
+	}
 	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(border).
 		BorderForeground(nodeBoxBorderColor(n)).
 		Padding(0, 1).
 		Width(contentWidth + 2)
+	if stale {
+		style = style.Faint(true)
+	}
 	return style.Render(strings.Join(nodeBoxLines(n, contentWidth), "\n"))
 }
 
@@ -125,6 +148,14 @@ func renderNodeBox(n fetch.NodeRow, contentWidth int) string {
 // sectionWidth, joining each row left-to-right and stacking rows top-to-
 // bottom. This is the whole grid a cluster's border wraps around.
 func renderNodeGrid(nodes []fetch.NodeRow, sectionWidth int) string {
+	return renderNodeGridState(nodes, sectionWidth, false)
+}
+
+func renderStaleNodeGrid(nodes []fetch.NodeRow, sectionWidth int) string {
+	return renderNodeGridState(nodes, sectionWidth, true)
+}
+
+func renderNodeGridState(nodes []fetch.NodeRow, sectionWidth int, stale bool) string {
 	if len(nodes) == 0 {
 		return ""
 	}
@@ -132,7 +163,11 @@ func renderNodeGrid(nodes []fetch.NodeRow, sectionWidth int) string {
 
 	boxes := make([]string, len(nodes))
 	for i, n := range nodes {
-		boxes[i] = renderNodeBox(n, contentWidth)
+		if stale {
+			boxes[i] = renderStaleNodeBox(n, contentWidth)
+		} else {
+			boxes[i] = renderNodeBox(n, contentWidth)
+		}
 	}
 
 	gap := strings.Repeat(" ", boxGap)

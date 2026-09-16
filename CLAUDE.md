@@ -21,7 +21,7 @@ trailer:
 ```
 feat(ui): render per-cluster node table
 
-Task: bf-xxxx
+Task: clustert-xxxx
 ```
 
 Git identity for all commits in this repo:
@@ -60,6 +60,17 @@ close a bead that doesn't meet its acceptance criteria.
 
 ## Tracker
 
-Beads (`bf` CLI) live in this repo. Every task bead's acceptance criteria are
-commands (`go build`, `go test ./path/...`, etc.) — a task isn't done until
-the command it names actually passes.
+Beads (`bead` CLI — bead-rs, per `.needle.yaml` `bead_cli.backend: bead-rs`)
+live in this repo; bead IDs are `clustert-*` prefixed. Every task bead's
+acceptance criteria are commands (`go build`, `go test ./path/...`, etc.) — a
+task isn't done until the command it names actually passes.
+
+If the store is broken or a fresh clone is missing `.beads/beads.db`, recover
+from the durable checkpoint: `bead doctor` first (read-only without
+`--repair`), then
+`bead sync import-only --input .beads/checkpoint/forensic.jsonl --restore-into-empty --actor <you>`.
+Never run a recovery command from the deprecated bead CLI against this
+workspace — it fails as a generic SQLite schema error, and applying the other
+tool's recovery recipe reinitializes the store with the wrong schema and
+destroys live data. See the org CLAUDE.md "Beads (bead-rs CLI)" section for
+the full gotcha list and the incident behind it.

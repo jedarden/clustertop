@@ -52,3 +52,32 @@ domain-check's request (1000m/2Gi → keep) but keep the limit within the
 documented 6Gi ceiling (i.e. raise to `2000m/4Gi` → `4000m` request /
 `6000m`... no, memory not cpu — raise memory limit toward 6Gi if genuinely
 needed, not silently back to 8Gi).
+
+## Resolution (2026-09-16): 2Gi request / 4Gi limit is sufficient — no bump needed
+
+Verified against a real end-to-end tag release, workflow
+`clustertop-release-8x4z5` in iad-ci (tag `v0.3.2`, committed at
+`e7f2b55`, submitted by `clustertop-sensor` from the GitHub webhook with
+`tag=refs/tags/v0.3.2`):
+
+| Step | Wall time | Outcome |
+|---|---|---|
+| `quality-gate` (500m/1Gi req, 1000m/2Gi limit) | 17:41:22Z → 17:47:55Z (~6.5 min) | Succeeded |
+| `goreleaser-release` (1000m/2Gi req, 2000m/4Gi limit) | 17:48:05Z → 17:53:27Z (~5.4 min) | Succeeded |
+
+- The goreleaser pod's container status was sampled live every 15s for the
+  pod's entire lifetime (pods are GC'd on completion, so OOM evidence has to
+  be caught in-flight): `terminated reason=Completed exit=0`,
+  `restartCount=0`, `lastState` empty at every sample — no OOMKilled, and no
+  `reason=OOMKilling` events in the namespace.
+- Well under the 1800s step deadline too (~5.4 min for the full 4-target
+  cross-compile on the 2000m limit) — clustertop is a small module and Go
+  cross-compilation of it does not approach the budget headroom that the
+  half-of-domain-check sizing was worried about.
+- GitHub Release `v0.3.2` published non-draft with all four platform
+  tarballs (3.8–4.3 MB each, `state=uploaded`) plus `checksums.txt`.
+
+The deliberately-halved sizing stands. Any future template that copies
+domain-check's `4000m/8Gi` is still over-budget per iad-ci/CLAUDE.md; this
+workflow demonstrates the documented ceiling (`limit <= 2x request, <= 6Gi,
+<= 3.50c/6.16Gi allocatable`) is workable in practice, not just on paper.

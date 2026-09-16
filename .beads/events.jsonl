@@ -13,3 +13,5 @@
 {"adapter":"claude-code-glm-5.3-flash","attempt_id":"01a0a973-3c5c-71d1-9f0d-04ca9254b0b7","bead":"clustert-2bac3bc1","event":"dispatch","model":"glm-5.3-flash","strand":"explore","ts":"2026-09-16T09:01:36.732918088+00:00","worker":"glm-roam-19"}
 {"bead":"clustert-da4fce91","duration_ms":1536349,"event":"complete","exit_code":0,"outcome":"success","strand":"explore","ts":"2026-09-16T09:12:08.559268444+00:00","worker":"glm-roam-18"}
 {"bead":"clustert-2bac3bc1","duration_ms":3601502,"event":"timeout","exit_code":124,"outcome":"timeout","strand":"explore","ts":"2026-09-16T10:01:38.258067675+00:00","worker":"glm-roam-19"}
+{"bead":"clustert-2bac3bc1","event":"claim","strand":"explore","ts":"2026-09-16T12:09:34.796002505+00:00","worker":"glm-armor"}
+{"adapter":"claude-code-glm-5.3","attempt_id":"01a0aa1f-5458-7f81-8db7-9e0347a32705","bead":"clustert-2bac3bc1","event":"dispatch","model":"glm-5.3","strand":"explore","ts":"2026-09-16T12:09:35.064247230+00:00","worker":"glm-armor"}

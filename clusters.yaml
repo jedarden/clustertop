@@ -18,8 +18,8 @@ clusters:
     endpoint: http://traefik-iad-options.tail1b1987.ts.net:8001
     route: traefik-kubectl-tcp
   - name: ord-devimprint
-    endpoint: http://kubectl-proxy-ord-devimprint.tail1b1987.ts.net:8001
-    route: direct-tailscale-operator
+    endpoint: http://traefik-ord-devimprint.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
   - name: rs-manager
     endpoint: http://traefik-rs-manager.tail1b1987.ts.net:8001
     route: traefik-kubectl-tcp

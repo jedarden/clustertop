@@ -122,10 +122,10 @@ this by eye, precisely so it can't silently regress.
   Forgejo/GitHub.
 - 8 live clusters, each with a `devpod-observer/kubectl-proxy.yml` manifest on
   `declarative-config`'s `main` branch — full inventory in
-  `docs/research/cluster-endpoints.md`. Caveat carried forward honestly: this
-  is a manifest reading, not a live connectivity test from this host — Phase 1's
-  verification step (§7) is where that actually gets confirmed by running the
-  binary.
+  `docs/research/cluster-endpoints.md`. All 8 were confirmed live from this
+  host on 2026-09-16 (that pass also caught a stale ord-devimprint endpoint
+  and the iad-ci timeout flapping — see the live-verification section of the
+  research note).
 - `ardenone-hub` is fully decommissioned on `declarative-config`'s `main`
   (removed 2026-06-09) — confirmed via `git log`, not a candidate for this
   tool. See `docs/research/ardenone-hub-decommission.md`.
@@ -326,7 +326,10 @@ without changing what's already specified.
   this writing) rather than freezing a version now.
 - **Per-cluster fetch timeout tuning** (currently 5s default) — adjust after
   running against the real fleet if any cluster's proxy is consistently
-  slower under normal conditions.
+  slower under normal conditions. The real-fleet data now exists
+  (2026-09-16): iad-ci takes 6.5–9.7s solo and flaps UNREACHABLE at 5s; the
+  other seven clusters are sub-second. Remedy options and numbers in the
+  live-verification section of `docs/research/cluster-endpoints.md`.
 - **Pod-level rollup / live CPU-mem commitment / metrics-server integration**
   — explicitly out of scope for v1 (would require listing pods on every
   cluster, not just nodes). Noted as a fast-follow, not a v1 blocker.

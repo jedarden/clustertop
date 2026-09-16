@@ -68,11 +68,80 @@ tool never touches secrets.
   `templated-from-name` convention; the two routing styles aren't
   interchangeable.
 
+## Live verification (2026-09-16, codinghome)
+
+Ran the full playbook (`plan.md` §7) against the real fleet: `curl` + `jq` per
+endpoint, then the built binary in tmux (220×120, three 15s refresh cycles),
+plus the negative fault-isolation test and the narrow-layout check. This
+closes the "manifest reading, not a live connectivity test" caveat above —
+and it caught real drift, so the caveat was justified.
+
+### Reachability + decode results
+
+All 8 endpoints answered `HTTP 200` with `kind: NodeList` / `apiVersion: v1`,
+and every cluster rendered a full Ready node grid through the binary's own
+`k8sclient.FetchNodes` decode path (a decode failure would have collapsed
+that cluster's section to an error line):
+
+| Cluster | Nodes | Solo fetch total | Notes |
+|---|---|---|---|
+| apexalgo-iad | 3 | 0.80s | |
+| ardenone-cluster | 7 | 0.71s | largest body, 258KB |
+| ardenone-manager | 1 | 0.34s | |
+| iad-ci | 6 | **6.5–9.7s** | see failure #2 |
+| iad-kalshi | 2 | 0.46s | |
+| iad-options | 3 | 0.58s | |
+| ord-devimprint | 4 | 0.67s | healthy only after fix #1 |
+| rs-manager | 3 | 0.47s | |
+
+### Failure #1 — `clusters.yaml` had a dead endpoint for ord-devimprint (fixed)
+
+`http://kubectl-proxy-ord-devimprint.tail1b1987.ts.net:8001` stopped
+resolving (NXDOMAIN). Root cause: `declarative-config` commit `ab028563`
+(2026-08-22, "feat(ord-devimprint): add Traefik Tailscale service exposure")
+moved the cluster from direct-Tailscale-operator exposure to Traefik-routed
+(`traefik-ord-devimprint`, port `kubectl-tcp` 8001); `clusters.yaml` predated
+that change and was never regenerated. `go run . sync-clusters` against a
+current `declarative-config` checkout produced exactly the one-entry diff
+(endpoint + route), which is what's checked in now. The old direct-exposure
+shape was verified live *only* through its failure: the pre-fix hostname
+NXDOMAIN'd, everything else about the cluster was healthy.
+
+Playbook implication: `sync-clusters` diffing (`plan.md` §7 Phase 5) is not
+just a scanner-bug check — it is the drift detector for this file, and it
+should be run before trusting a stale checkout's `clusters.yaml`.
+
+### Failure #2 — iad-ci is consistently slower than the 5s fetch timeout (recorded, not changed)
+
+iad-ci's `/api/v1/nodes` took **6.5s / 7.9s / 9.0s / 9.7s** across four
+sequential solo samples (153KB, chunked; TTFB ~0.25s — the body trickles).
+`defaultFetchTimeout` is 5s, so iad-ci flapped `UNREACHABLE — decode nodelist:
+context deadline exceeded` on roughly half of the observed refresh cycles,
+recovering on the next. Every other cluster completes in under a second solo;
+under the 8-way concurrent cold start, one or two clusters (apexalgo-iad,
+ord-devimprint seen) could also briefly exceed 5s, but always recovered by the
+next cycle. Fault isolation behaved exactly as designed throughout: only the
+timed-out cluster's section degraded; the other seven stayed fresh.
+
+This is the data half of the `plan.md` §6 open question ("per-cluster fetch
+timeout tuning — adjust after running against the real fleet"). The remedy is
+deliberately *not* applied here — that's a design decision (raise
+`defaultFetchTimeout` vs. a per-cluster `timeout:` field in `clusters.yaml`,
+since 7/8 clusters need <1s and only iad-ci needs more). The slowdown's cause
+(proxy sidecar, API server, or network path) was not diagnosed from here.
+
+### Negative tests (both passed)
+
+- **Fault isolation:** with `iad-kalshi` pointed at `dead-host.invalid:8001`
+  (config copy in a scratch dir, tracked file untouched), that section alone
+  collapsed to `UNREACHABLE` with a clear `dial tcp: lookup … no such host`
+  error while the other 7 kept fresh Ready counts.
+- **Responsive layout:** at 60 columns the VERSION line is dropped and node
+  rows still render.
+
 ## What remains unknown
 
-- I have not personally curled all 8 endpoints from this host — the table
-  above is one agent's manifest reading, not a live connectivity test. The
-  verification playbook in `plan.md` covers this: running the actual binary
-  against `clusters.yaml` is the real test, and a wrong or dead endpoint fails
-  loudly (`UNREACHABLE` in the TUI) rather than silently, so this is an
-  acceptable risk to carry into implementation rather than block on.
+- Why iad-ci's node list is slow (see failure #2) — the numbers above are
+  recorded from the client side only.
+- The node counts in the table are a point-in-time snapshot (2026-09-16);
+  fleet membership changes constantly and is not itself a correctness claim.

@@ -145,3 +145,43 @@ since 7/8 clusters need <1s and only iad-ci needs more). The slowdown's cause
   recorded from the client side only.
 - The node counts in the table are a point-in-time snapshot (2026-09-16);
   fleet membership changes constantly and is not itself a correctness claim.
+
+## Live re-verification (2026-09-27, codinghome)
+
+I rebuilt the binary from the current `main` checkout and checked all eight
+entries in the checked-in `clusters.yaml`. A concurrent direct smoke test used
+`GET /api/v1/nodes`, required HTTP 200, and decoded each response with `jq`,
+requiring `kind: NodeList`, `apiVersion: v1`, and an array-valued `items` field.
+All eight passed with a 60-second transport budget:
+
+| Cluster | Nodes | Total | Bytes | Result |
+|---|---:|---:|---:|---|
+| apexalgo-iad | 3 | 8.882s | 81,797 | HTTP 200 + NodeList JSON |
+| ardenone-cluster | 7 | 0.702s | 262,167 | HTTP 200 + NodeList JSON |
+| ardenone-manager | 1 | 3.454s | 23,958 | HTTP 200 + NodeList JSON |
+| iad-ci | 7 | 8.516s | 178,395 | HTTP 200 + NodeList JSON; exceeds 5s app timeout |
+| iad-kalshi | 2 | 0.472s | 50,178 | HTTP 200 + NodeList JSON |
+| iad-options | 3 | 0.721s | 61,627 | HTTP 200 + NodeList JSON |
+| ord-devimprint | 10 | 15.978s | 201,041 | HTTP 200 + NodeList JSON; exceeds 5s app timeout |
+| rs-manager | 3 | 0.473s | 74,553 | HTTP 200 + NodeList JSON |
+
+### Current application timeout findings
+
+The built binary was run in a 220-column tmux session for 15 seconds. Seven
+clusters rendered decoded Ready grids. `iad-ci` rendered
+`UNREACHABLE — decode nodelist: context deadline exceeded`, reproducing
+failure #2 under the binary's `defaultFetchTimeout` of 5 seconds. The other
+seven sections rendered decoded grids, including 10 Ready nodes for
+`ord-devimprint` in that run.
+
+A separate 15-second direct request to `ord-devimprint` returned HTTP 200 and
+49,106 bytes before the client timeout, without a complete JSON document. A
+concurrent request with a 60-second budget completed in 15.978 seconds and
+decoded successfully. This is a second slow-response observation, not a
+malformed-JSON or endpoint-reachability failure; the per-cluster timeout
+design still permits it to appear as `UNREACHABLE` during a slow sample.
+
+The live check therefore found no current dead endpoint or JSON-shape failure,
+but confirms that `iad-ci` and `ord-devimprint` remain slower than the binary's
+5-second timeout under observed conditions. Timeout tuning remains a separate
+design decision and was not changed by this verification.

@@ -257,3 +257,10 @@ No endpoint or JSON-decoding failure occurred. `iad-ci` remains a current
 slow-response application failure because the completed response exceeded the
 binary's 10-second per-cluster timeout; `ord-devimprint` recovered to a
 sub-second response in this sample. The timeout policy is unchanged.
+
+The same smoke was repeated from a clean archive of the committed HEAD as part
+of the acceptance verification. That pass again found HTTP 200 and valid
+NodeList JSON for all eight endpoints, with `iad-ci` completing in 11.045s and
+`ord-devimprint` in 21.911s. Those two responses therefore remain observed
+application-layer timeout failures under the 10-second binary budget, not
+connectivity or JSON-decoding failures.

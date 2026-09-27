@@ -72,6 +72,22 @@ func TestStatusLine_WarningMarkerPresent(t *testing.T) {
 	}
 }
 
+func TestStatusLine_OnDemandPoolWarningOnReadyNode(t *testing.T) {
+	line := statusLine(fetch.NodeRow{Ready: true, Warning: "on-demand pool"}, 40)
+	for _, want := range []string{"●", "Ready", "⚠", "on-demand pool"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("statusLine = %q, missing %q", line, want)
+		}
+	}
+}
+
+func TestStatusLine_OrdinaryReadyNodeHasNoWarningMarker(t *testing.T) {
+	line := statusLine(fetch.NodeRow{Ready: true, PoolType: "compute1-4"}, 40)
+	if strings.Contains(line, "⚠") {
+		t.Errorf("ordinary pool statusLine unexpectedly rendered a warning marker: %q", line)
+	}
+}
+
 func TestStatusLine_LongWarningNeverPushesGlyphOut(t *testing.T) {
 	n := fetch.NodeRow{Name: "n", Ready: false, Warning: strings.Repeat("x", 100)}
 	line := statusLine(n, 20)

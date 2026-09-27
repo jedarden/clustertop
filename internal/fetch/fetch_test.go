@@ -54,14 +54,29 @@ func TestFromNode_Roles(t *testing.T) {
 	}
 }
 
-func TestFromNode_OnDemandWarning(t *testing.T) {
-	n := corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{"servers.ngpc.rxt.io/type": "ondemand"},
-		},
+func TestFromNode_PricingModelWarnings(t *testing.T) {
+	cases := []struct {
+		name  string
+		model string
+		want  string
+	}{
+		{name: "on-demand", model: "ondemand", want: "on-demand pool"},
+		{name: "ordinary spot", model: "spot", want: ""},
+		{name: "ordinary without pricing label", want: ""},
 	}
-	if got := FromNode(n).Warning; got != "on-demand pool" {
-		t.Errorf("Warning = %q, want %q", got, "on-demand pool")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			labels := map[string]string{
+				"node.kubernetes.io/instance-type": "compute1-4",
+			}
+			if tc.model != "" {
+				labels[pricingModelLabel] = tc.model
+			}
+			row := FromNode(corev1.Node{ObjectMeta: metav1.ObjectMeta{Labels: labels}})
+			if row.Warning != tc.want {
+				t.Errorf("Warning = %q, want %q", row.Warning, tc.want)
+			}
+		})
 	}
 }
 

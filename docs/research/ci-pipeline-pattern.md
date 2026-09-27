@@ -83,10 +83,23 @@ is the established convention, not an oversight.
   (unlike `domain-check`, which needs the filter because of its VERSION bump).
 - Auth: reuse `github-webhook-secret`. No new ExternalSecret.
 
-## What remains unknown
+## Implementation decision (2026-09-27)
 
-Whether GoReleaser 2.5.0 (pinned in `domain-check`) is still the latest stable
-— worth checking at implementation time rather than research time, since
-GoReleaser's own release cadence is outside this repo's control and pinning to
-whatever's current when the WorkflowTemplate is actually written is more
-correct than freezing a version now.
+The official GoReleaser release page lists **v2.18.2** as the latest stable
+release at implementation time. The `v2.19.0-*` entries are nightly
+prereleases, so they are not suitable for a production release pipeline.
+
+The clustertop `goreleaser-release` WorkflowTemplate pins `2.18.2` and
+downloads the Linux x86_64 binary from GoReleaser's official GitHub release
+asset:
+
+```sh
+GORELEASER_VERSION="2.18.2"
+wget -qO- "https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/goreleaser_Linux_x86_64.tar.gz" \
+  | tar -xz -C /usr/local/bin goreleaser
+```
+
+The workflow runs `goreleaser --version` immediately after installation so a
+failed or incompatible download stops the release before the repository is
+built or published. The workflow source of truth is
+`declarative-config/k8s/iad-ci/argo-workflows/clustertop-workflowtemplate.yml`.

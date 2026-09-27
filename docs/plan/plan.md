@@ -321,9 +321,12 @@ without changing what's already specified.
   limit. Resolve by running the real release workflow once (Phase 4) and
   checking for `OOMKilled`; if it happens, raise toward the 6 GiB ceiling
   stated in `iad-ci/CLAUDE.md`, not back to `domain-check`'s 8Gi.
-- **Exact GoReleaser version to pin** in the WorkflowTemplate — check what's
-  current at Phase 4 implementation time (`domain-check` pins 2.5.0 as of
-  this writing) rather than freezing a version now.
+- **Exact GoReleaser version to pin** — resolved 2026-09-27: the official
+  release page listed v2.18.2 as the latest stable release at implementation
+  time. The clustertop WorkflowTemplate pins 2.18.2 and downloads the Linux
+  x86_64 archive from GoReleaser's GitHub release assets; see
+  `docs/research/ci-pipeline-pattern.md` for the exact URL and verification
+  command.
 - **Per-cluster fetch timeout tuning — resolved 2026-09-27.** The default is
   now 10s, based on a fresh all-endpoint pass: `iad-ci` completed in 9.195s,
   while `ord-devimprint` took 45.712s and exceeded the 15s refresh period.

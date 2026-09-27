@@ -51,3 +51,8 @@ expected to surface as an isolated timeout during those slow responses rather
 than allowing long fetches to accumulate across refresh cycles. This is a
 deliberate global budget; a per-cluster timeout configuration is not justified
 by the healthy-cluster measurements and would hide the endpoint-side latency.
+
+The implementation asserts the 10s value in `TestDefaultTimingBudget` and
+exercises the production default with a healthy response delayed by 9s in
+`TestDefaultFetchTimeoutAllowsHealthyNineSecondResponse`; that response
+completes successfully rather than surfacing as a timeout.

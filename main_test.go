@@ -27,7 +27,7 @@ func buildCLI(t *testing.T) string {
 	}
 
 	binary := filepath.Join(t.TempDir(), "clustertop")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", binary, ".")
 	cmd.Dir = repoRoot
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, output)

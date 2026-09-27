@@ -3,13 +3,20 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 const cliStartupTimeout = 5 * time.Second
@@ -115,4 +122,143 @@ func TestCLIStartupReadsConfigurationFromCurrentWorkingDirectory(t *testing.T) {
 `)
 
 	assertCLIConfigError(t, binary, workingDir, "clustertop: config: clusters list is empty")
+}
+
+func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T) {
+	binary := buildCLI(t)
+	workingDir := t.TempDir()
+
+	clusters := []struct {
+		name          string
+		initialNode   string
+		refreshedNode string
+		server        *httptest.Server
+		requests      atomic.Int32
+	}{
+		{name: "alpha", initialNode: "alpha-node", refreshedNode: "alpha-new"},
+		{name: "beta", initialNode: "beta-node", refreshedNode: "beta-new"},
+	}
+	for i := range clusters {
+		cluster := &clusters[i]
+		cluster.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/api/v1/nodes" {
+				cluster.requests.Add(1)
+				http.Error(w, "unexpected request", http.StatusNotFound)
+				return
+			}
+
+			requestNumber := cluster.requests.Add(1)
+			nodeName := cluster.initialNode
+			if requestNumber > 1 {
+				nodeName = cluster.refreshedNode
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"apiVersion":"v1","kind":"NodeList","items":[{"metadata":{"name":"`+nodeName+`","labels":{"node-role.kubernetes.io/worker":"","node.kubernetes.io/instance-type":"compute1-4"}},"status":{"conditions":[{"type":"Ready","status":"True"}],"nodeInfo":{"kubeletVersion":"v1.32.0"}}}]}`)
+		}))
+		t.Cleanup(cluster.server.Close)
+	}
+
+	writeClustersYAML(t, workingDir, "clusters:\n"+
+		"  - name: alpha\n"+
+		"    endpoint: "+clusters[0].server.URL+"\n"+
+		"    route: test\n"+
+		"  - name: beta\n"+
+		"    endpoint: "+clusters[1].server.URL+"\n"+
+		"    route: test\n")
+
+	cmd := exec.Command(binary)
+	cmd.Dir = workingDir
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 160, Rows: 80})
+	if err != nil {
+		t.Fatalf("start CLI in PTY: %v", err)
+	}
+	defer func() {
+		if cmd.ProcessState == nil && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = ptmx.Close()
+	}()
+
+	var outputMu sync.Mutex
+	var output strings.Builder
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := ptmx.Read(buf)
+			if n > 0 {
+				outputMu.Lock()
+				output.Write(buf[:n])
+				outputMu.Unlock()
+			}
+			if readErr != nil {
+				return
+			}
+		}
+	}()
+
+	waitForOutput := func(want string) {
+		t.Helper()
+		deadline := time.Now().Add(cliStartupTimeout)
+		for time.Now().Before(deadline) {
+			outputMu.Lock()
+			got := output.String()
+			outputMu.Unlock()
+			if strings.Contains(got, want) {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		outputMu.Lock()
+		got := output.String()
+		outputMu.Unlock()
+		t.Fatalf("CLI output did not contain %q; output:\n%s", want, got)
+	}
+
+	waitForOutput("[q] quit  [r] refresh")
+	waitForOutput("┌─ alpha")
+	waitForOutput("┌─ beta")
+	waitForOutput("alpha-node")
+	waitForOutput("beta-node")
+	for i := range clusters {
+		cluster := &clusters[i]
+		if got := cluster.requests.Load(); got != 1 {
+			t.Fatalf("%s startup request count = %d, want exactly 1", cluster.name, got)
+		}
+	}
+
+	if _, err := ptmx.Write([]byte("r")); err != nil {
+		t.Fatalf("send refresh key: %v", err)
+	}
+	waitForOutput("alpha-new")
+	waitForOutput("beta-new")
+	for i := range clusters {
+		cluster := &clusters[i]
+		if got := cluster.requests.Load(); got != 2 {
+			t.Fatalf("%s request count after refresh = %d, want exactly 2", cluster.name, got)
+		}
+	}
+
+	if _, err := ptmx.Write([]byte("q")); err != nil {
+		t.Fatalf("send quit key: %v", err)
+	}
+
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+	select {
+	case err := <-waitCh:
+		if err != nil {
+			t.Fatalf("CLI exited after q: %v", err)
+		}
+	case <-time.After(cliStartupTimeout):
+		t.Fatal("CLI did not exit after q before the timeout")
+	}
+
+	_ = ptmx.Close()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("PTY output reader did not stop after CLI exit")
+	}
 }

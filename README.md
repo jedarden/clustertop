@@ -130,7 +130,7 @@ the short help.
 ## Refresh behavior
 
 - All clusters are fetched concurrently at startup and again every **15s**.
-- Each cluster's fetch is bounded by its own **5s** timeout and runs on its
+- Each cluster's fetch is bounded by its own **10s** timeout and runs on its
   own goroutine, so a hung endpoint only delays its own section.
 - A failed cluster flips to `UNREACHABLE` in its section while the rest keep
   updating — fault isolation is per cluster, by design.
@@ -139,7 +139,7 @@ the short help.
   so a flaky cluster degrades to stale data instead of disappearing.
 - Before the first fetch completes a cluster shows `— connecting…`, keeping a
   cold start visibly distinct from an incident.
-- The 15s refresh interval and 5s fetch timeout are compile-time constants
+- The 15s refresh interval and 10s fetch timeout are compile-time constants
   (`internal/ui/run.go`), not runtime options.
 - Resizing the terminal re-flows the grid immediately.
 

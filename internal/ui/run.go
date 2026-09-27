@@ -11,7 +11,11 @@ import (
 const (
 	defaultClustersPath = "clusters.yaml"
 	defaultRefreshEvery = 15 * time.Second
-	defaultFetchTimeout = 5 * time.Second
+	// Keep five seconds of headroom before the next refresh tick. Live endpoint
+	// measurements show iad-ci completing in roughly 9s, while endpoints that
+	// exceed the 15s refresh period should remain isolated rather than letting
+	// fetches pile up across refresh cycles.
+	defaultFetchTimeout = 10 * time.Second
 )
 
 // Run starts the TUI, loading clusters.yaml from the current directory.

@@ -16,7 +16,7 @@ here:
   runs each contained `tea.Cmd` concurrently, each on its own goroutine —
   this is a property of the Bubble Tea runtime itself, not something this
   project has to build.
-- Every per-cluster fetch is wrapped in its own `context.WithTimeout(ctx, 5*time.Second)`.
+- Every per-cluster fetch is wrapped in its own `context.WithTimeout(ctx, 10*time.Second)`.
   `internal/k8sclient.FetchNodes` always returns `(nil, err)` on deadline
   exceeded, dial failure, non-200, or decode failure — never panics, never
   blocks past the timeout.
@@ -36,10 +36,18 @@ collapsing "never fetched yet" and "confirmed unreachable" into one state
 would make cold-start and genuine failure indistinguishable in the UI, which
 matters for trusting what the dashboard is telling you at a glance.
 
-## What remains unknown
+## Timeout validation and decision (2026-09-27)
 
-Whether 5s is the right per-cluster timeout in practice — it's a reasonable
-starting default (well under the 15s refresh interval, generous for a
-same-tailnet HTTP round trip) but not empirically tuned. Adjust after running
-against the real fleet if any cluster's proxy pod is consistently slower than
-that under normal (non-incident) conditions.
+A fresh concurrent request pass against all eight configured endpoints decoded
+valid `NodeList` responses. Healthy clusters completed in 0.36–0.88s;
+`iad-ci` took 9.195s and `ord-devimprint` took 45.712s. The earlier
+measurements in `docs/research/cluster-endpoints.md` likewise put `iad-ci` at
+6.5–9.7s and observed `ord-devimprint` at 15.978s.
+
+The default is therefore raised from 5s to **10s**. This covers the observed
+`iad-ci` response while preserving 5s of headroom inside the 15s refresh
+interval. `ord-devimprint` can exceed an entire refresh period, so it remains
+expected to surface as an isolated timeout during those slow responses rather
+than allowing long fetches to accumulate across refresh cycles. This is a
+deliberate global budget; a per-cluster timeout configuration is not justified
+by the healthy-cluster measurements and would hide the endpoint-side latency.

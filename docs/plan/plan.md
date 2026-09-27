@@ -324,12 +324,13 @@ without changing what's already specified.
 - **Exact GoReleaser version to pin** in the WorkflowTemplate — check what's
   current at Phase 4 implementation time (`domain-check` pins 2.5.0 as of
   this writing) rather than freezing a version now.
-- **Per-cluster fetch timeout tuning** (currently 5s default) — adjust after
-  running against the real fleet if any cluster's proxy is consistently
-  slower under normal conditions. The real-fleet data now exists
-  (2026-09-16): iad-ci takes 6.5–9.7s solo and flaps UNREACHABLE at 5s; the
-  other seven clusters are sub-second. Remedy options and numbers in the
-  live-verification section of `docs/research/cluster-endpoints.md`.
+- **Per-cluster fetch timeout tuning — resolved 2026-09-27.** The default is
+  now 10s, based on a fresh all-endpoint pass: `iad-ci` completed in 9.195s,
+  while `ord-devimprint` took 45.712s and exceeded the 15s refresh period.
+  Ten seconds covers the former while retaining 5s of headroom for the next
+  refresh; the latter remains an intentionally isolated timeout. Full data
+  and the global-versus-per-cluster decision are recorded in
+  `docs/research/cluster-endpoints.md`.
 - **Pod-level rollup / live CPU-mem commitment / metrics-server integration**
   — explicitly out of scope for v1 (would require listing pods on every
   cluster, not just nodes). Noted as a fast-follow, not a v1 blocker.

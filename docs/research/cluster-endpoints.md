@@ -111,7 +111,7 @@ Playbook implication: `sync-clusters` diffing (`plan.md` §7 Phase 5) is not
 just a scanner-bug check — it is the drift detector for this file, and it
 should be run before trusting a stale checkout's `clusters.yaml`.
 
-### Failure #2 — iad-ci is consistently slower than the 5s fetch timeout (recorded, not changed)
+### Failure #2 — iad-ci is consistently slower than the original 5s fetch timeout (historical)
 
 iad-ci's `/api/v1/nodes` took **6.5s / 7.9s / 9.0s / 9.7s** across four
 sequential solo samples (153KB, chunked; TTFB ~0.25s — the body trickles).
@@ -123,12 +123,11 @@ ord-devimprint seen) could also briefly exceed 5s, but always recovered by the
 next cycle. Fault isolation behaved exactly as designed throughout: only the
 timed-out cluster's section degraded; the other seven stayed fresh.
 
-This is the data half of the `plan.md` §6 open question ("per-cluster fetch
-timeout tuning — adjust after running against the real fleet"). The remedy is
-deliberately *not* applied here — that's a design decision (raise
-`defaultFetchTimeout` vs. a per-cluster `timeout:` field in `clusters.yaml`,
-since 7/8 clusters need <1s and only iad-ci needs more). The slowdown's cause
-(proxy sidecar, API server, or network path) was not diagnosed from here.
+This was the data half of the `plan.md` §6 open question. At the time of this
+2026-09-16 verification the remedy was deliberately deferred while awaiting a
+decision on a global timeout versus a per-cluster `timeout:` field. The
+slowdown's cause (proxy sidecar, API server, or network path) was not diagnosed
+from here.
 
 ### Negative tests (both passed)
 
@@ -183,5 +182,30 @@ design still permits it to appear as `UNREACHABLE` during a slow sample.
 
 The live check therefore found no current dead endpoint or JSON-shape failure,
 but confirms that `iad-ci` and `ord-devimprint` remain slower than the binary's
-5-second timeout under observed conditions. Timeout tuning remains a separate
-design decision and was not changed by this verification.
+original 5-second timeout under observed conditions. The timeout decision from
+the follow-on validation is recorded below.
+
+## Fetch-timeout decision (2026-09-27)
+
+A fresh concurrent timing/decode pass against all eight endpoints produced
+these results:
+
+| Cluster | Nodes | Total | Result |
+|---|---:|---:|---|
+| apexalgo-iad | 3 | 0.683s | HTTP 200 + valid NodeList JSON |
+| ardenone-cluster | 7 | 0.720s | HTTP 200 + valid NodeList JSON |
+| ardenone-manager | 1 | 0.364s | HTTP 200 + valid NodeList JSON |
+| iad-ci | 7 | 9.195s | HTTP 200 + valid NodeList JSON |
+| iad-kalshi | 2 | 0.849s | HTTP 200 + valid NodeList JSON |
+| iad-options | 3 | 0.848s | HTTP 200 + valid NodeList JSON |
+| ord-devimprint | 10 | 45.712s | HTTP 200 + valid NodeList JSON |
+| rs-manager | 3 | 0.877s | HTTP 200 + valid NodeList JSON |
+
+The implementation now uses a **10s** per-cluster timeout instead of 5s. It
+covers the observed `iad-ci` completion window while leaving 5s of headroom
+before the 15s refresh tick. `ord-devimprint` exceeded the refresh period and
+therefore remains intentionally isolated as a timeout during such a slow
+response; increasing the global budget to accommodate it would let one
+endpoint's fetch overlap later refresh cycles. The timeout is global rather
+than per-cluster because seven endpoints are sub-second and the slow response
+is endpoint-side latency that should remain visible.

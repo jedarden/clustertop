@@ -3,16 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -127,44 +123,9 @@ func TestCLIStartupReadsConfigurationFromCurrentWorkingDirectory(t *testing.T) {
 func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T) {
 	binary := buildCLI(t)
 	workingDir := t.TempDir()
-
-	clusters := []struct {
-		name          string
-		initialNode   string
-		refreshedNode string
-		server        *httptest.Server
-		requests      atomic.Int32
-	}{
-		{name: "alpha", initialNode: "alpha-node", refreshedNode: "alpha-new"},
-		{name: "beta", initialNode: "beta-node", refreshedNode: "beta-new"},
-	}
-	for i := range clusters {
-		cluster := &clusters[i]
-		cluster.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/api/v1/nodes" {
-				cluster.requests.Add(1)
-				http.Error(w, "unexpected request", http.StatusNotFound)
-				return
-			}
-
-			requestNumber := cluster.requests.Add(1)
-			nodeName := cluster.initialNode
-			if requestNumber > 1 {
-				nodeName = cluster.refreshedNode
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"apiVersion":"v1","kind":"NodeList","items":[{"metadata":{"name":"`+nodeName+`","labels":{"node-role.kubernetes.io/worker":"","node.kubernetes.io/instance-type":"compute1-4"}},"status":{"conditions":[{"type":"Ready","status":"True"}],"nodeInfo":{"kubeletVersion":"v1.32.0"}}}]}`)
-		}))
-		t.Cleanup(cluster.server.Close)
-	}
-
-	writeClustersYAML(t, workingDir, "clusters:\n"+
-		"  - name: alpha\n"+
-		"    endpoint: "+clusters[0].server.URL+"\n"+
-		"    route: test\n"+
-		"  - name: beta\n"+
-		"    endpoint: "+clusters[1].server.URL+"\n"+
-		"    route: test\n")
+	harness := newDashboardSmokeHarness(t)
+	harness.writeConfig(t, workingDir)
+	wantNodes := harness.nodeNames(t)
 
 	cmd := exec.Command(binary)
 	cmd.Dir = workingDir
@@ -217,28 +178,21 @@ func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T)
 	}
 
 	waitForOutput("[q] quit  [r] refresh")
-	waitForOutput("┌─ alpha")
-	waitForOutput("┌─ beta")
-	waitForOutput("alpha-node")
-	waitForOutput("beta-node")
-	for i := range clusters {
-		cluster := &clusters[i]
-		if got := cluster.requests.Load(); got != 1 {
-			t.Fatalf("%s startup request count = %d, want exactly 1", cluster.name, got)
-		}
+	for clusterName, nodeName := range wantNodes {
+		waitForOutput("┌─ " + clusterName)
+		waitForOutput(nodeName)
 	}
+	harness.waitForRequests(t, 1)
+	harness.assertRequests(t, 1)
 
 	if _, err := ptmx.Write([]byte("r")); err != nil {
 		t.Fatalf("send refresh key: %v", err)
 	}
-	waitForOutput("alpha-new")
-	waitForOutput("beta-new")
-	for i := range clusters {
-		cluster := &clusters[i]
-		if got := cluster.requests.Load(); got != 2 {
-			t.Fatalf("%s request count after refresh = %d, want exactly 2", cluster.name, got)
-		}
+	for _, nodeName := range wantNodes {
+		waitForOutput(nodeName)
 	}
+	harness.waitForRequests(t, 2)
+	harness.assertRequests(t, 2)
 
 	if _, err := ptmx.Write([]byte("q")); err != nil {
 		t.Fatalf("send quit key: %v", err)

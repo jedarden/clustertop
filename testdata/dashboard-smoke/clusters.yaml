@@ -1,0 +1,7 @@
+clusters:
+  - name: alpha
+    endpoint: http://alpha.dashboard-smoke.test
+    route: test
+  - name: beta
+    endpoint: http://beta.dashboard-smoke.test
+    route: test

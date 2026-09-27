@@ -209,3 +209,27 @@ response; increasing the global budget to accommodate it would let one
 endpoint's fetch overlap later refresh cycles. The timeout is global rather
 than per-cluster because seven endpoints are sub-second and the slow response
 is endpoint-side latency that should remain visible.
+
+## Live smoke recheck (2026-09-27, current dispatch)
+
+A fresh concurrent smoke from the checked-in `clusters.yaml` built the binary
+successfully and requested `/api/v1/nodes` from all eight endpoints with a
+60-second transport budget. Every request returned HTTP 200 and decoded as a
+`v1` `NodeList` with an array-valued `items` field:
+
+| Cluster | Nodes | Body bytes | Total | Result |
+|---|---:|---:|---:|---|
+| apexalgo-iad | 3 | 81,797 | 10.112s | HTTP 200 + valid NodeList JSON |
+| ardenone-cluster | 7 | 262,167 | 0.718s | HTTP 200 + valid NodeList JSON |
+| ardenone-manager | 1 | 23,958 | 0.362s | HTTP 200 + valid NodeList JSON |
+| iad-ci | 7 | 176,122 | 13.994s | HTTP 200 + valid NodeList JSON; exceeds 10s app timeout |
+| iad-kalshi | 2 | 49,479 | 0.702s | HTTP 200 + valid NodeList JSON |
+| iad-options | 3 | 61,627 | 0.672s | HTTP 200 + valid NodeList JSON |
+| ord-devimprint | 10 | 201,271 | 29.814s | HTTP 200 + valid NodeList JSON; exceeds 10s app timeout |
+| rs-manager | 3 | 74,553 | 0.585s | HTTP 200 + valid NodeList JSON |
+
+The smoke test found no dead endpoint or malformed JSON. The two rows marked
+above are current slow-response failures at the application layer: a binary
+fetch using the 10-second timeout can report them as `UNREACHABLE` even though
+the endpoint eventually returns a valid node list. This recheck records the
+latency observation without changing the timeout policy.

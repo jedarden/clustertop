@@ -233,3 +233,27 @@ above are current slow-response failures at the application layer: a binary
 fetch using the 10-second timeout can report them as `UNREACHABLE` even though
 the endpoint eventually returns a valid node list. This recheck records the
 latency observation without changing the timeout policy.
+
+## Live smoke recheck (2026-09-27 11:31 UTC, dispatch retry)
+
+I rebuilt the binary with `go build -o /build/clustertop/clustertop-live-smoke
+.` and ran another concurrent smoke from the checked-in `clusters.yaml`.
+Each request was `GET /api/v1/nodes` with a 60-second transport budget; `jq`
+required HTTP 200, `kind: NodeList`, `apiVersion: v1`, and an array-valued
+`items` field:
+
+| Cluster | Nodes | Body bytes | Total | Result |
+|---|---:|---:|---:|---|
+| apexalgo-iad | 3 | 81,797 | 4.617s | HTTP 200 + valid NodeList JSON |
+| ardenone-cluster | 7 | 261,921 | 0.724s | HTTP 200 + valid NodeList JSON |
+| ardenone-manager | 1 | 23,958 | 0.410s | HTTP 200 + valid NodeList JSON |
+| iad-ci | 7 | 176,502 | 11.560s | HTTP 200 + valid NodeList JSON; exceeds 10s app timeout |
+| iad-kalshi | 2 | 49,479 | 0.471s | HTTP 200 + valid NodeList JSON |
+| iad-options | 3 | 61,627 | 0.457s | HTTP 200 + valid NodeList JSON |
+| ord-devimprint | 10 | 201,271 | 0.780s | HTTP 200 + valid NodeList JSON |
+| rs-manager | 3 | 74,553 | 0.497s | HTTP 200 + valid NodeList JSON |
+
+No endpoint or JSON-decoding failure occurred. `iad-ci` remains a current
+slow-response application failure because the completed response exceeded the
+binary's 10-second per-cluster timeout; `ord-devimprint` recovered to a
+sub-second response in this sample. The timeout policy is unchanged.

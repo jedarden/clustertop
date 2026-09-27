@@ -46,6 +46,36 @@ func TestRenderClusterSection_PendingHasNoBodyLines(t *testing.T) {
 	}
 }
 
+func TestRenderBody_PendingTransitionsToHealthyAfterFirstResult(t *testing.T) {
+	m := newTestModel("iad-ci")
+
+	pending := m.View()
+	if !strings.Contains(pending, "connecting…") {
+		t.Fatalf("cold-start dashboard should show the cluster as connecting:\n%s", pending)
+	}
+	for _, forbidden := range []string{"UNREACHABLE", "stale"} {
+		if strings.Contains(pending, forbidden) {
+			t.Errorf("cold-start dashboard must not show %q:\n%s", forbidden, pending)
+		}
+	}
+
+	newM, _ := m.Update(fetchResultMsg{
+		ClusterName: "iad-ci",
+		Nodes:       []fetch.NodeRow{{Name: "fresh-node", Ready: true}},
+	})
+	afterFirstResult := newM.(Model).View()
+	for _, forbidden := range []string{"connecting…", "UNREACHABLE", "stale"} {
+		if strings.Contains(afterFirstResult, forbidden) {
+			t.Errorf("first successful result must replace the pending state, but output contains %q:\n%s", forbidden, afterFirstResult)
+		}
+	}
+	for _, want := range []string{"iad-ci", "1/1 Ready", "fresh-node"} {
+		if !strings.Contains(afterFirstResult, want) {
+			t.Errorf("first successful result render missing %q:\n%s", want, afterFirstResult)
+		}
+	}
+}
+
 func TestRenderClusterSection_UnreachableWithoutSnapshotHasOnlyErrorLine(t *testing.T) {
 	setAscii(t)
 	cs := ClusterState{

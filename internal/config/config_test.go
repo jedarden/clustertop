@@ -86,18 +86,46 @@ func TestLoadClusters_ShippedClustersYAML(t *testing.T) {
 
 func TestLoadClusters_UnknownKeyIgnored(t *testing.T) {
 	path := writeTemp(t, `
+future_schema_version: 2
 clusters:
   - name: apexalgo-iad
     endpoint: http://traefik-apexalgo-iad.tail1b1987.ts.net:8001
     route: traefik-kubectl-tcp
+    notes: primary production cluster
     future_field: some-value-a-future-schema-added
+    future_metadata:
+      owner: platform
+  - name: iad-kalshi
+    endpoint: http://kubectl-proxy-iad-kalshi.tail1b1987.ts.net:8001
+    route: direct-tailscale-operator
+    notes: direct operator route
+    another_future_field: true
 `)
 	cfg, err := LoadClusters(path)
 	if err != nil {
 		t.Fatalf("unexpected error decoding an unknown key: %v", err)
 	}
-	if len(cfg.Clusters) != 1 {
-		t.Fatalf("expected 1 cluster, got %d", len(cfg.Clusters))
+	want := []Cluster{
+		{
+			Name:     "apexalgo-iad",
+			Endpoint: "http://traefik-apexalgo-iad.tail1b1987.ts.net:8001",
+			Route:    "traefik-kubectl-tcp",
+			Notes:    "primary production cluster",
+		},
+		{
+			Name:     "iad-kalshi",
+			Endpoint: "http://kubectl-proxy-iad-kalshi.tail1b1987.ts.net:8001",
+			Route:    "direct-tailscale-operator",
+			Notes:    "direct operator route",
+		},
+	}
+	if len(cfg.Clusters) != len(want) {
+		t.Fatalf("expected %d clusters, got %d", len(want), len(cfg.Clusters))
+	}
+	for i, wantCluster := range want {
+		if got := cfg.Clusters[i]; got != wantCluster {
+			t.Errorf("cluster %d = %+v, want %+v", i, got, wantCluster)
+		}
 	}
 }
 

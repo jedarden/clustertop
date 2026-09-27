@@ -101,9 +101,45 @@ clusters:
 	}
 }
 
+func TestLoadClusters_DuplicateNamesError(t *testing.T) {
+	path := writeTemp(t, `
+clusters:
+  - name: apexalgo-iad
+    endpoint: http://traefik-apexalgo-iad.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
+  - name: iad-kalshi
+    endpoint: http://kubectl-proxy-iad-kalshi.tail1b1987.ts.net:8001
+    route: direct-tailscale-operator
+  - name: apexalgo-iad
+    endpoint: http://duplicate.example.invalid:8001
+    route: test
+`)
+
+	cfg, err := LoadClusters(path)
+	if err == nil {
+		t.Fatal("expected duplicate cluster name to be rejected")
+	}
+	if got, want := err.Error(), `config: duplicate cluster name "apexalgo-iad"`; got != want {
+		t.Errorf("error message = %q, want %q", got, want)
+	}
+	if len(cfg.Clusters) != 0 {
+		t.Errorf("expected an empty Config alongside the error, got %d clusters", len(cfg.Clusters))
+	}
+
+	// A second load of the same bytes must report the same duplicate, rather
+	// than depending on map iteration order or another nondeterministic detail.
+	_, err2 := LoadClusters(path)
+	if err2 == nil {
+		t.Fatal("second load unexpectedly succeeded")
+	}
+	if err2.Error() != err.Error() {
+		t.Errorf("error is not deterministic:\n  first: %q\n  second: %q", err.Error(), err2.Error())
+	}
+}
+
 // TestLoadClusters_MissingEndpointStillLoads pins the decided loader
-// contract (docs/plan/plan.md, cluster-config component: "error only if
-// Clusters is empty"): a cluster entry with no endpoint is not a load error.
+// contract (docs/plan/plan.md, cluster-config component): a cluster entry
+// with no endpoint is not a load error.
 // Reachability is the fetch layer's per-row concern — one broken entry must
 // degrade to that cluster's UNREACHABLE row, never blank out the fleet by
 // failing the whole load.
@@ -250,7 +286,7 @@ clusters: not-a-list
 	}
 }
 
-// TestLoadClusters_EmptyListErrors pins the loader's one hard error —
+// TestLoadClusters_EmptyListErrors pins the loader's empty-list hard error —
 // "there is nothing to display" (docs/plan/plan.md, cluster-config
 // component). Every shape of an empty document produces the identical
 // message, which is the determinism pin; the message names the problem, not

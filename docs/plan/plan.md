@@ -188,7 +188,7 @@ no dependency on Phase 0 completing first. Tasks:
       Route    string `yaml:"route"`               // display-only: "traefik-kubectl-tcp" | "direct-tailscale-operator"
       Notes    string `yaml:"notes,omitempty"`
   }
-  func LoadClusters(path string) (Config, error)   // gopkg.in/yaml.v3, default (non-strict) decode; error only if Clusters is empty
+  func LoadClusters(path string) (Config, error)   // gopkg.in/yaml.v3, default (non-strict) decode; error if Clusters is empty or names duplicate
   ```
 - **clusters.yaml** — owns `clusters.yaml`. Exact content (FQDN endpoints per
   the DECIDED row in §4, transcribed from `docs/research/cluster-endpoints.md`):

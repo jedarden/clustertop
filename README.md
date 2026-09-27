@@ -71,8 +71,10 @@ clusters:
 | `notes` | Optional; parsed but unused by the binary |
 
 Unknown keys are ignored (lenient decode), so a stale field never breaks an
-already-released binary. An empty `clusters:` list is the only fatal config
-error — there would be nothing to display.
+already-released binary. An empty `clusters:` list and duplicate cluster names
+are fatal configuration errors: there would be nothing to display in the first
+case, and fetch results could not be routed unambiguously in the second. The
+loader rejects both before the dashboard starts.
 
 Don't maintain this list by hand: regenerate it from the declarative-config
 checkout with `sync-clusters` so it can't silently drift.

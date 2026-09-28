@@ -38,7 +38,7 @@ func TestRenderClusterSection_AllLinesSameWidth(t *testing.T) {
 }
 
 func TestRenderClusterSection_PendingHasNoBodyLines(t *testing.T) {
-	cs := ClusterState{Cluster: config.Cluster{Name: "iad-ci"}, Status: StatusPending}
+	cs := pendingClusterState("iad-ci")
 	out := renderClusterSection(cs, 60)
 	lines := strings.Split(out, "\n")
 	if len(lines) != 2 {
@@ -209,7 +209,7 @@ func TestRenderClusterSection_AggregateBorderColors(t *testing.T) {
 		},
 		{
 			name:      "pending is gray",
-			cs:        ClusterState{Cluster: config.Cluster{Name: "iad-ci"}, Status: StatusPending},
+			cs:        pendingClusterState("iad-ci"),
 			wantColor: ansiGray,
 			wantText:  "connecting…",
 		},

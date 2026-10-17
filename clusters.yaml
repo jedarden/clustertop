@@ -1,4 +1,7 @@
 clusters:
+  - name: agent-sandbox
+    endpoint: http://traefik-agent-sandbox.tail1b1987.ts.net:8001
+    route: traefik-kubectl-tcp
   - name: apexalgo-iad
     endpoint: http://traefik-apexalgo-iad.tail1b1987.ts.net:8001
     route: traefik-kubectl-tcp

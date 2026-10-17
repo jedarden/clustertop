@@ -74,7 +74,14 @@ Unknown keys are ignored (lenient decode), so a stale field never breaks an
 already-released binary. An empty `clusters:` list and duplicate cluster names
 are fatal configuration errors: there would be nothing to display in the first
 case, and fetch results could not be routed unambiguously in the second. The
-loader rejects both before the dashboard starts.
+loader rejects both before the dashboard starts — the binary prints the error
+to stderr and exits non-zero instead of starting the TUI. One duplicated name
+reports `config: duplicate cluster name "apexalgo-iad"`; when several names are
+duplicated, every one of them is named in a single message:
+`config: duplicate cluster names "apexalgo-iad", "iad-kalshi"`. An endpoint
+that is missing or unreachable is not a load error — it degrades that cluster
+to `UNREACHABLE` (see [Refresh behavior](#refresh-behavior)), never the whole
+fleet.
 
 Don't maintain this list by hand: regenerate it from the declarative-config
 checkout with `sync-clusters` so it can't silently drift.

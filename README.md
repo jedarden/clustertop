@@ -49,9 +49,11 @@ directory containing the file you want and launch from there. Run
 load error rather than starting an empty dashboard.
 
 Each cluster renders as a bordered section: a node grid with Ready/NotReady
-state, roles, instance type (pool), kubelet version, and age, plus a warning
-marker for on-demand pools and scale-down-tainted nodes. The footer shows the
-current keybindings.
+state, roles, instance type (pool), kubelet version, and age. A node gets a
+`⚠` warning marker in its status line when its pricing-model label is
+`servers.ngpc.rxt.io/type=ondemand` (on-demand pool) or it carries an
+autoscaler scale-down taint; ordinary spot-pool nodes do not get this marker.
+The footer shows the current keybindings.
 
 ## Configuration — clusters.yaml
 

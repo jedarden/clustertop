@@ -79,6 +79,40 @@ func assertCLIConfigError(t *testing.T, binary, dir, want string) {
 	}
 }
 
+func dashboardClusterSection(t *testing.T, output, clusterName string) string {
+	t.Helper()
+
+	start := strings.LastIndex(output, "┌─ "+clusterName)
+	if start == -1 {
+		t.Fatalf("dashboard output has no section for %q:\n%s", clusterName, output)
+	}
+	section := output[start:]
+	if next := strings.Index(section[len("┌─ "):], "┌─ "); next != -1 {
+		section = section[:len("┌─ ")+next]
+	}
+	return section
+}
+
+func assertDashboardPoolWarningContract(t *testing.T, output string) {
+	t.Helper()
+
+	onDemand := dashboardClusterSection(t, output, "alpha")
+	if !strings.Contains(onDemand, "pool: compute1-4") {
+		t.Errorf("on-demand section is missing its pool label:\n%s", onDemand)
+	}
+	if !strings.Contains(onDemand, "⚠ on-dem") {
+		t.Errorf("on-demand section is missing its warning marker:\n%s", onDemand)
+	}
+
+	ordinary := dashboardClusterSection(t, output, "beta")
+	if !strings.Contains(ordinary, "pool: compute1-8") {
+		t.Errorf("ordinary section is missing its pool label:\n%s", ordinary)
+	}
+	if strings.Contains(ordinary, "⚠") {
+		t.Errorf("ordinary pool section unexpectedly rendered a warning marker:\n%s", ordinary)
+	}
+}
+
 func TestCLIStartupMissingClustersYAMLExitsWithLoadError(t *testing.T) {
 	binary := buildCLI(t)
 	workingDir := t.TempDir()
@@ -206,6 +240,10 @@ func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T)
 		waitForOutput("┌─ " + clusterName)
 		waitForOutput(nodeName)
 	}
+	outputMu.Lock()
+	initialOutput := output.String()
+	outputMu.Unlock()
+	assertDashboardPoolWarningContract(t, initialOutput)
 	harness.waitForRequests(t, 1)
 	harness.assertRequests(t, 1)
 

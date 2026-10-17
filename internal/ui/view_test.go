@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/jedarden/clustertop/internal/config"
 	"github.com/jedarden/clustertop/internal/fetch"
@@ -73,6 +75,53 @@ func TestRenderBody_PendingTransitionsToHealthyAfterFirstResult(t *testing.T) {
 		if !strings.Contains(afterFirstResult, want) {
 			t.Errorf("first successful result render missing %q:\n%s", want, afterFirstResult)
 		}
+	}
+}
+
+func TestRenderClusterSection_PoolWarningMarkerFollowsDetection(t *testing.T) {
+	setAscii(t)
+
+	ready := []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}
+	cases := []struct {
+		name          string
+		pricingModel  string
+		wantMarker    bool
+		wantPoolLabel string
+	}{
+		{name: "on-demand pool", pricingModel: "ondemand", wantMarker: true, wantPoolLabel: "compute1-4"},
+		{name: "ordinary spot pool", pricingModel: "spot", wantMarker: false, wantPoolLabel: "compute1-4"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			node := corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-a",
+					Labels: map[string]string{
+						"node.kubernetes.io/instance-type": "compute1-4",
+						"servers.ngpc.rxt.io/type":         tc.pricingModel,
+					},
+				},
+				Status: corev1.NodeStatus{Conditions: ready},
+			}
+			row := fetch.FromNode(node)
+			out := renderClusterSection(ClusterState{
+				Cluster: config.Cluster{Name: "iad-ci"},
+				Status:  StatusOK,
+				Nodes:   []fetch.NodeRow{row},
+			}, 40)
+
+			if !strings.Contains(out, "pool: "+tc.wantPoolLabel) {
+				t.Errorf("rendered pool classification missing %q:\n%s", tc.wantPoolLabel, out)
+			}
+			gotMarker := strings.Contains(out, "⚠")
+			if gotMarker != tc.wantMarker {
+				t.Errorf("warning marker present = %v, want %v:\n%s", gotMarker, tc.wantMarker, out)
+			}
+			if tc.wantMarker && !strings.Contains(out, "⚠ on-demand pool") {
+				t.Errorf("on-demand render missing warning label:\n%s", out)
+			}
+		})
 	}
 }
 

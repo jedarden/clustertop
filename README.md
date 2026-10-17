@@ -100,6 +100,21 @@ clustertop sync-clusters \
   --out clusters.yaml        # this is the default
 ```
 
+Re-run this check after any cluster is added or removed in `declarative-config`,
+or a kubeconfig manifest, `kubectl-proxy` Service, or Tailscale route changes,
+and before each release. From the clustertop checkout, regenerate the file and
+diff it against the committed version:
+
+```bash
+clustertop sync-clusters \
+  --declarative-config-path ~/declarative-config \
+  --out clusters.yaml
+git diff -- clusters.yaml
+```
+
+An empty diff means the committed `clusters.yaml` is current. If the diff is
+non-empty, commit the regenerated file.
+
 `--declarative-config-path` is required. For each directory under
 `<path>/k8s/` it recognizes two manifest shapes:
 

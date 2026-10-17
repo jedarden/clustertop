@@ -165,6 +165,31 @@ clusters:
 	}
 }
 
+func TestLoadClusters_MultipleDuplicateNamesError(t *testing.T) {
+	path := writeTemp(t, `
+clusters:
+  - name: apexalgo-iad
+  - name: iad-kalshi
+  - name: unique
+  - name: iad-kalshi
+  - name: apexalgo-iad
+  - name: iad-kalshi
+`)
+	want := `config: duplicate cluster names "apexalgo-iad", "iad-kalshi"`
+	for i := 0; i < 10; i++ {
+		cfg, err := LoadClusters(path)
+		if err == nil {
+			t.Fatal("expected duplicate cluster names to be rejected")
+		}
+		if got := err.Error(); got != want {
+			t.Errorf("load %d: error message = %q, want %q", i, got, want)
+		}
+		if len(cfg.Clusters) != 0 {
+			t.Errorf("load %d: expected an empty Config alongside the error, got %d clusters", i, len(cfg.Clusters))
+		}
+	}
+}
+
 // TestLoadClusters_MissingEndpointStillLoads pins the decided loader
 // contract (docs/plan/plan.md, cluster-config component): a cluster entry
 // with no endpoint is not a load error.

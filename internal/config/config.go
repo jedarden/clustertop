@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,11 +41,31 @@ func LoadClusters(path string) (Config, error) {
 		return Config{}, errors.New("config: clusters list is empty")
 	}
 	seenNames := make(map[string]struct{}, len(cfg.Clusters))
+	nameOrder := make([]string, 0, len(cfg.Clusters))
+	duplicateNames := make(map[string]struct{})
 	for _, cluster := range cfg.Clusters {
 		if _, exists := seenNames[cluster.Name]; exists {
-			return Config{}, fmt.Errorf("config: duplicate cluster name %q", cluster.Name)
+			duplicateNames[cluster.Name] = struct{}{}
+			continue
 		}
 		seenNames[cluster.Name] = struct{}{}
+		nameOrder = append(nameOrder, cluster.Name)
+	}
+	if len(duplicateNames) == 1 {
+		for _, name := range nameOrder {
+			if _, exists := duplicateNames[name]; exists {
+				return Config{}, fmt.Errorf("config: duplicate cluster name %q", name)
+			}
+		}
+	}
+	if len(duplicateNames) > 1 {
+		quotedNames := make([]string, 0, len(duplicateNames))
+		for _, name := range nameOrder {
+			if _, exists := duplicateNames[name]; exists {
+				quotedNames = append(quotedNames, fmt.Sprintf("%q", name))
+			}
+		}
+		return Config{}, errors.New("config: duplicate cluster names " + strings.Join(quotedNames, ", "))
 	}
 	return cfg, nil
 }

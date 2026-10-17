@@ -129,6 +129,12 @@ func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T)
 
 	cmd := exec.Command(binary)
 	cmd.Dir = workingDir
+	// Pin the CLI's terminal type so the assertions below see plain text
+	// regardless of the invoking environment. Note this does NOT suppress the
+	// startup background probe — bubbletea's package init sends the OSC 11 +
+	// DSR query whenever stdout is a TTY, TERM=dumb included; the read loop
+	// below answers it.
+	cmd.Env = append(os.Environ(), "TERM=dumb")
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 160, Rows: 80})
 	if err != nil {
 		t.Fatalf("start CLI in PTY: %v", err)
@@ -143,6 +149,7 @@ func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T)
 	var outputMu sync.Mutex
 	var output strings.Builder
 	readDone := make(chan struct{})
+	answeredBackgroundProbe := false
 	go func() {
 		defer close(readDone)
 		buf := make([]byte, 4096)
@@ -151,6 +158,17 @@ func TestCLIStartupHealthyDashboardFetchesRendersRefreshesAndQuits(t *testing.T)
 			if n > 0 {
 				outputMu.Lock()
 				output.Write(buf[:n])
+				// bubbletea's package init probes the terminal's background
+				// color (OSC 11 plus a DSR sentinel) and blocks for up to
+				// termenv's 5s OSC timeout waiting for the reply. A real
+				// terminal answers from the far end of the pty; answer here
+				// too, or the CLI's first frame renders only after the probe
+				// times out — past cliStartupTimeout — and the assertions
+				// below fail no matter how healthy the fetch path is.
+				if !answeredBackgroundProbe && strings.Contains(output.String(), "\x1b]11;?") {
+					answeredBackgroundProbe = true
+					_, _ = ptmx.Write([]byte("\x1b]11;rgb:0000/0000/0000\x1b\\\x1b[1;1R"))
+				}
 				outputMu.Unlock()
 			}
 			if readErr != nil {

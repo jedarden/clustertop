@@ -48,6 +48,36 @@ func TestRenderClusterSection_PendingHasNoBodyLines(t *testing.T) {
 	}
 }
 
+// TestRenderClusterSection_PendingIdentifiedNotUnreachableOrStale pins the
+// three classification properties the fixture contract
+// (docs/notes/pending-cluster-fixture-contract.md) promises for the cold-start
+// render: the section identifies itself as pending via its "— connecting…"
+// label, and the tri-state design keeps it clear of both incident
+// classifications — never the UNREACHABLE label or the unreachable red
+// (classification, not just label), and never a stale marker. The gray border
+// color of this same render is pinned by the "pending is gray" case of
+// TestRenderClusterSection_AggregateBorderColors.
+func TestRenderClusterSection_PendingIdentifiedNotUnreachableOrStale(t *testing.T) {
+	setANSI256(t)
+	out := renderClusterSection(pendingClusterState("iad-ci"), 60)
+
+	if !strings.Contains(out, "iad-ci") {
+		t.Errorf("pending section must identify the cluster by name:\n%s", out)
+	}
+	if !strings.Contains(out, "— connecting…") {
+		t.Errorf("pending section must identify the cluster as pending via the connecting label:\n%s", out)
+	}
+	if strings.Contains(out, "UNREACHABLE") {
+		t.Errorf("pending cluster must not be labeled UNREACHABLE:\n%s", out)
+	}
+	if strings.Contains(out, ansiRed) {
+		t.Errorf("pending section must not carry the unreachable red classification:\n%s", out)
+	}
+	if strings.Contains(out, "stale") {
+		t.Errorf("pending cluster must not be labeled stale:\n%s", out)
+	}
+}
+
 // TestRenderBody_PendingTransitionsToHealthyAfterFirstResult renders the
 // whole dashboard from the shared pending fixture (docs/notes/
 // pending-cluster-fixture-contract.md) — the before-first-fetch state

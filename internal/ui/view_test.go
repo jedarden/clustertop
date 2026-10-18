@@ -84,6 +84,7 @@ func TestRenderClusterSection_PendingIdentifiedNotUnreachableOrStale(t *testing.
 // TestPendingClusterFixtureContract pins to NewModel's cold-start shape —
 // then drives one successful result through the same model.
 func TestRenderBody_PendingTransitionsToHealthyAfterFirstResult(t *testing.T) {
+	setANSI256(t)
 	m := newTestModel("iad-ci")
 	m.Clusters[0] = pendingClusterState("iad-ci")
 
@@ -99,19 +100,60 @@ func TestRenderBody_PendingTransitionsToHealthyAfterFirstResult(t *testing.T) {
 		}
 	}
 
+	m.markAllFetching()
 	newM, _ := m.Update(fetchResultMsg{
 		ClusterName: "iad-ci",
 		Nodes:       []fetch.NodeRow{{Name: "fresh-node", Ready: true}},
 	})
-	afterFirstResult := newM.(Model).View()
+	m = newM.(Model)
+	cs := m.Clusters[0]
+	if cs.Status != StatusOK || cs.Fetching || cs.Err != nil || cs.LastFetch.IsZero() {
+		t.Fatalf("first successful result did not establish a completed healthy snapshot: %+v", cs)
+	}
+	afterFirstResult := m.View()
 	for _, forbidden := range []string{"connecting…", "UNREACHABLE", "stale"} {
 		if strings.Contains(afterFirstResult, forbidden) {
 			t.Errorf("first successful result must replace the pending state, but output contains %q:\n%s", forbidden, afterFirstResult)
 		}
 	}
-	for _, want := range []string{"iad-ci", "1/1 Ready", "fresh-node"} {
+	for _, want := range []string{"iad-ci", "1/1 Ready", "fresh-node", ansiGreen} {
 		if !strings.Contains(afterFirstResult, want) {
 			t.Errorf("first successful result render missing %q:\n%s", want, afterFirstResult)
+		}
+	}
+}
+
+func TestRenderBody_PendingTransitionsToErrorAfterFirstResult(t *testing.T) {
+	setANSI256(t)
+	m := newTestModel("iad-ci")
+	m.Clusters[0] = pendingClusterState("iad-ci")
+	m.markAllFetching()
+
+	pending := m.View()
+	if !strings.Contains(pending, "connecting…") || strings.Contains(pending, "UNREACHABLE") {
+		t.Fatalf("first fetch must still render as pending before its result:\n%s", pending)
+	}
+
+	fetchErr := errors.New("timeout")
+	newM, _ := m.Update(fetchResultMsg{ClusterName: "iad-ci", Err: fetchErr})
+	m = newM.(Model)
+	cs := m.Clusters[0]
+	if cs.Status != StatusError || cs.Fetching || cs.Err != fetchErr {
+		t.Fatalf("first failed result did not establish a completed error state: %+v", cs)
+	}
+	if len(cs.Nodes) != 0 || !cs.LastFetch.IsZero() {
+		t.Fatalf("first failed result must not create a stale snapshot: %+v", cs)
+	}
+
+	afterFirstResult := m.View()
+	for _, want := range []string{"iad-ci", "UNREACHABLE", "timeout", ansiRed} {
+		if !strings.Contains(afterFirstResult, want) {
+			t.Errorf("first failed result render missing %q:\n%s", want, afterFirstResult)
+		}
+	}
+	for _, forbidden := range []string{"connecting…", "stale", "Ready"} {
+		if strings.Contains(afterFirstResult, forbidden) {
+			t.Errorf("first failed result must replace pending without showing a stale snapshot, but output contains %q:\n%s", forbidden, afterFirstResult)
 		}
 	}
 }

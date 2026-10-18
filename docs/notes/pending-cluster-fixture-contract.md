@@ -8,8 +8,9 @@ result** — the cold start every dashboard session begins in. Resolved
 ## State: uninitialized / pending
 
 The fixture is the uninitialized **pending** state:
-`ClusterStatus.StatusPending` (`internal/ui/model.go`), the zero value
-`NewModel` assigns every configured cluster. It renders as
+`ui.StatusPending` (a `ui.ClusterStatus` value defined in
+`internal/ui/model.go`), the zero value `NewModel` assigns every configured
+cluster. It renders as
 `<name> — connecting…` inside a gray border.
 
 The status is deliberately tri-state, not bool: pending must stay visually

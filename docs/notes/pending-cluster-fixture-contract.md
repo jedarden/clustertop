@@ -40,8 +40,12 @@ into a state the dashboard cannot reach.
 ## Consumer
 
 The **dashboard render-test package `internal/ui`** is the fixture's
-consumer. Current consumers within the package: `view_test.go` (pending
-border/`connecting…` render cases). `model_test.go` exercises the same state
+consumer. Current consumers within the package: all three pending render
+cases in `view_test.go` — `TestRenderClusterSection_PendingHasNoBodyLines`,
+the gray-border case of `TestRenderClusterSection_AggregateBorderColors`, and
+`TestRenderBody_PendingTransitionsToHealthyAfterFirstResult`, which renders
+the fixture through `Model.View` for the full-dashboard
+pending→first-result transition. `model_test.go` exercises the same state
 through `NewModel` rather than the fixture helper.
 
 ## Relationship to the dashboard smoke fixture contract

@@ -48,14 +48,22 @@ func TestRenderClusterSection_PendingHasNoBodyLines(t *testing.T) {
 	}
 }
 
+// TestRenderBody_PendingTransitionsToHealthyAfterFirstResult renders the
+// whole dashboard from the shared pending fixture (docs/notes/
+// pending-cluster-fixture-contract.md) — the before-first-fetch state
+// TestPendingClusterFixtureContract pins to NewModel's cold-start shape —
+// then drives one successful result through the same model.
 func TestRenderBody_PendingTransitionsToHealthyAfterFirstResult(t *testing.T) {
 	m := newTestModel("iad-ci")
+	m.Clusters[0] = pendingClusterState("iad-ci")
 
 	pending := m.View()
 	if !strings.Contains(pending, "connecting…") {
 		t.Fatalf("cold-start dashboard should show the cluster as connecting:\n%s", pending)
 	}
-	for _, forbidden := range []string{"UNREACHABLE", "stale"} {
+	// "Ready" must be absent too: a pending cluster has no node rows, so the
+	// render stays distinguishable from a populated fetched one.
+	for _, forbidden := range []string{"UNREACHABLE", "stale", "Ready"} {
 		if strings.Contains(pending, forbidden) {
 			t.Errorf("cold-start dashboard must not show %q:\n%s", forbidden, pending)
 		}
